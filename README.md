@@ -1,4 +1,4 @@
-dover
+Dover
 =====
 
 Dover checks which bindings exported by a Racket package have no Scribble documentation.
@@ -8,25 +8,15 @@ $ raco pkg install dover
 $ raco dover check mypkg-lib
 ```
 
-It reports missing documentation per module, flags bindings whose docs exist but can't be reached
-from the module users require, and can print `defproc`/`defform` stubs for whatever is missing
-(`--format stubs`). Use `--min <percent>` to fail a CI build when coverage drops.
+It reports missing documentation per module, warns about docs that Scribble can't reach from a
+module that re-exports the binding and about `declare-exporting` claims that aren't true (with a
+suggested fix for each), and can print `defproc`/`defform` stubs for whatever is missing
+(`--format stubs`). In CI, `--min <percent>` fails the build when coverage drops, and `--strict`
+fails it when there are warnings.
 
-Configuration such as bindings to ignore goes in the package's `info.rkt`. See the documentation
-for details.
+Configuration such as bindings to ignore goes in the package's `info.rkt`.
 
-## Repository layout
-
-| Package     | Contents                                   |
-|-------------|--------------------------------------------|
-| `dover-lib` | Implementation and the `raco dover` command |
-| `dover`     | Documentation; installs `dover-lib`        |
-
-To work on it locally:
-
-```
-raco pkg install --link dover-lib dover
-```
+**Documentation is at: <https://joeldueck.com/what-about/dover/>**
 
 ## License
 
