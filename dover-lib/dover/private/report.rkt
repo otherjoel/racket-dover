@@ -346,6 +346,17 @@
   (term-bytes color:reset)
   (write-string (~a "\n\n" id (if (eq? (binding-kind b) 'value) " proc" " form") "}\n\n")))
 
+;; A stub names at most this many of its siblings
+(define max-sibling-names 3)
+
+;; "a, b, c", or "a, b, c and 2 others" when there are more than n ids
+(define (names-up-to ids n)
+  (define shown (string-join (map ~a (if (> (length ids) n) (take ids n) ids)) ", "))
+  (define more (- (length ids) n))
+  (cond
+    [(<= more 0) shown]
+    [else (format "~a and ~a other~a" shown more (if (= more 1) "" "s"))]))
+
 ;; Prints Scribble stubs for the scored bindings that have no documentation, grouped by the
 ;; module they are reported under. A module that has no docs yet gets a defmodule; for one that
 ;; does, a comment says to add the stubs to its docs. A stub for a binding defined in another
@@ -366,7 +377,8 @@
       (newline))
     (cond
       [(member mod documented-modules)
-       (write-stub-comment (~a "Add to the existing docs for " (module->string mod)))]
+       (write-stub-comment (~a "Suggestion: add these under the existing defmodule or "
+                               "declare-exporting for " (module->string mod)))]
       [else
        (term-bytes color:bold)
        (write-string (~a "@defmodule[" (module->string mod) "]"))
@@ -381,5 +393,13 @@
                        #:when (equal? (binding-source-module d) (binding-source-module b)))
               (binding-id d))))
       (unless (null? siblings)
-        (write-stub-comment (~a "Next to " (string-join (map ~a siblings) ", "))))
+        (write-stub-comment (~a "Suggestion: add this near the existing docs for "
+                                (names-up-to siblings max-sibling-names))))
       (write-stub-def b))))
+
+(module+ test
+  (require rackunit)
+  (check-equal? (names-up-to '(a b) 3) "a, b")
+  (check-equal? (names-up-to '(a b c) 3) "a, b, c")
+  (check-equal? (names-up-to '(a b c d) 3) "a, b, c and 1 other")
+  (check-equal? (names-up-to '(a b c d e) 3) "a, b, c and 2 others"))

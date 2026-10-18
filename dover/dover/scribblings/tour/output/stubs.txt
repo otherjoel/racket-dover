@@ -1,7 +1,7 @@
 raco dover check -f stubs tally
-[90m@; Add to the existing docs for tally(B[m
+[90m@; Suggestion: add these under the existing defmodule or declare-exporting for tally(B[m
 
-[90m@; Next to counter-add!, counter?, make-counter(B[m
+[90m@; Suggestion: add this near the existing docs for counter-add!, counter?, make-counter(B[m
 [1m@defproc[(counter-value [arg any/c]) any/c]{(B[m
 
 counter-value proc}
