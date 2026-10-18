@@ -14,7 +14,7 @@
 (define who (string->symbol "raco dover check"))
 
 ;; Configuration read from a package's top-level info.rkt
-(struct config (modules ignore include-private min-coverage) #:transparent)
+(struct config (modules ignore never-ignore consider-private min-coverage) #:transparent)
 
 (define (ignore-spec? v)
   (or (module-path? v)
@@ -33,15 +33,31 @@
                  "a list of module paths" #f)
           (field 'dover-ignore (λ (v) (and (list? v) (andmap ignore-spec? v)))
                  "a list of module paths or (module-path id ...) lists" '())
-          (field 'dover-include-private (λ (v) (and (list? v) (andmap module-path? v)))
+          (field 'dover-never-ignore (λ (v) (and (list? v) (andmap module-path? v)))
+                 "a list of module paths" '())
+          (field 'dover-consider-private (λ (v) (and (list? v) (andmap module-path? v)))
                  "a list of module paths" '())
           (field 'dover-min-coverage (λ (v) (and (real? v) (<= 0 v 100)))
                  "a number from 0 to 100" #f)))
 
+;; Modules in dover-consider-private are treated like modules in private/ directories: skipped
+;; unless include-private? is true. Modules in dover-never-ignore are always checked.
 (define (config-modules* cfg pkg include-private?)
-  (or (config-modules cfg)
-      (append (package-modules pkg #:include-private? include-private?)
-              (config-include-private cfg))))
+  (cond
+    [(config-modules cfg)
+     => (λ (mods) (remove-considered-private cfg (map normalize-module-path mods) include-private?))]
+    [else
+     (append (remove-considered-private
+              cfg
+              (package-modules pkg #:include-private? include-private?)
+              include-private?)
+             (map normalize-module-path (config-never-ignore cfg)))]))
+
+(define (remove-considered-private cfg mods include-private?)
+  (define private (map normalize-module-path (config-consider-private cfg)))
+  (if include-private?
+      mods
+      (filter (λ (m) (not (member m private))) mods)))
 
 ;; "mod" -> 'mod,  "mod:id" -> '(mod id). Module paths never contain a colon, but ids can.
 (define (parse-ignore str)
@@ -73,7 +89,7 @@
   (define mods
     (sort (remove-duplicates
            (append* (for/list ([pkg (in-list pkgs)] [cfg (in-list configs)])
-                      (map normalize-module-path (config-modules* cfg pkg include-private?)))))
+                      (config-modules* cfg pkg include-private?))))
           module<?))
   (define ignore (append (append-map config-ignore configs) extra-ignore))
   (define min-coverage (or cli-min (ormap config-min-coverage configs)))
@@ -120,7 +136,7 @@
     (command-line
      #:program "raco dover check"
      #:once-each
-     [("--include-private") "Also check modules in private/ directories"
+     [("--include-private") "Also check modules in private/ directories and dover-consider-private"
                             (set! include-private? #t)]
      [("--min") pct "Exit with status 1 if coverage is below <pct> percent"
                 (set! min-coverage (parse-min pct))]

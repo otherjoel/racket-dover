@@ -64,11 +64,13 @@
   (define doc-mods (binding-doc-modules b))
   (match w
     [(? unreachable-docs-warning?)
-     (format "add ~a to the #:use-sources of the defmodule or declare-exporting~a"
+     (format (string-append "add ~a to the #:use-sources of the defmodule or declare-exporting~a;"
+                            " or, if ~a is internal, list it in dover-consider-private")
              (module->string (binding-source-module b))
              (if (null? doc-mods)
                  " that documents it"
-                 (format " for ~a" (module->string (car doc-mods)))))]
+                 (format " for ~a" (module->string (car doc-mods))))
+             (module->string mod))]
     [(? export-claim-warning?)
      (format "remove ~a from the declare-exporting that documents ~a, or provide ~a from ~a"
              (module->string mod) (binding-id b) (binding-id b) (module->string mod))]))

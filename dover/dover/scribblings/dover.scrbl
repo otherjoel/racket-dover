@@ -37,9 +37,15 @@ By default, Dover checks every @filepath{.rkt} file in the package's collections
        since @exec{raco setup} does not compile them either.}
 ]
 
-Use @DFlag{include-private} to check modules in @filepath{private} directories too, or list
-specific private modules in the @racketidfont{dover-include-private} field of @filepath{info.rkt}. To
-replace module discovery altogether, list the modules in @racketidfont{dover-modules}.
+To treat other modules as private, list them in the @racketidfont{dover-consider-private} field
+of @filepath{info.rkt}. Use this for internal modules that are not in a @filepath{private}
+directory. Dover skips private modules, but still counts the bindings that checked modules
+re-export from them.
+
+Use @DFlag{include-private} to check all private modules too, or list specific private modules
+that Dover should always check in the @racketidfont{dover-never-ignore} field of
+@filepath{info.rkt}. To replace module discovery altogether, list the modules in
+@racketidfont{dover-modules}.
 
 Dover declares each module but does not instantiate it, so checking a package does not run its
 code.
@@ -98,7 +104,9 @@ suggested fix. Warnings do not affect the coverage score.
        To fix it, add the defining module to the @racket[#:use-sources] of the
        @racket[defmodule] or @racket[declare-exporting], which keys the docs to the definition
        so that every re-export reaches them. (Adding @racketidfont{mypkg/b} to
-       @racket[declare-exporting] does not help.)}
+       @racket[declare-exporting] does not help.) If @racketidfont{mypkg/b} is an internal
+       module that users should not require, list it in @racketidfont{dover-consider-private}
+       instead.}
 
  @item{@bold{Incorrect export claim.} The docs say a checked module exports a binding (through
        @racket[defmodule] or @racket[declare-exporting]), but the module doesn't. Either remove
@@ -108,7 +116,8 @@ suggested fix. Warnings do not affect the coverage score.
 @subsection{Command-line flags}
 
 @itemlist[
- @item{@DFlag{include-private} --- also check modules in @filepath{private} directories.}
+ @item{@DFlag{include-private} --- also check modules in @filepath{private} directories and
+       modules listed in @racketidfont{dover-consider-private}.}
  @item{@DFlag{ignore} @nonterm{module} or @DFlag{ignore} @nonterm{module}@litchar{:}@nonterm{id}
        --- ignore every binding from @nonterm{module}, or just the binding @nonterm{id}. The
        @nonterm{module} can be any module that exports the binding or the one that defines it.
@@ -148,16 +157,30 @@ optional.
        Typical candidates are bindings that exist only to produce better syntax errors, and
        internals that are exported for use by other modules in the same package.}
 
- @item{@racketidfont{dover-include-private} --- a list of modules in @filepath{private}
-       directories to check anyway.
+ @item{@racketidfont{dover-consider-private} --- a list of modules to treat as private, in
+       addition to the modules in @filepath{private} directories. Dover does not check them unless
+       @DFlag{include-private} is given, but bindings that checked modules re-export from them
+       still count.
 
        @racketblock[
-       (define dover-include-private '(mypkg/private/public-api))
+       (define dover-consider-private '(mypkg/components/email))
+       ]
+
+       Unlike @racketidfont{dover-ignore}, this does not remove any bindings from the check: a
+       binding defined in @racketidfont{mypkg/components/email} and re-exported by
+       @racketidfont{mypkg} is still counted, and still needs documentation.}
+
+ @item{@racketidfont{dover-never-ignore} --- a list of modules that Dover always checks, even
+       if they are in a @filepath{private} directory or listed in
+       @racketidfont{dover-consider-private}.
+
+       @racketblock[
+       (define dover-never-ignore '(mypkg/private/public-api))
        ]}
 
  @item{@racketidfont{dover-modules} --- a list of the modules to check. When present, Dover skips
-       module discovery and @racketidfont{dover-include-private} and checks exactly these
-       modules.}
+       module discovery and @racketidfont{dover-never-ignore} and checks exactly these
+       modules, minus any in @racketidfont{dover-consider-private}.}
 
  @item{@racketidfont{dover-min-coverage} --- a number from 0 to 100. When coverage is below it,
        @exec{raco dover check} exits with status 1. The @DFlag{min} flag overrides it.}
