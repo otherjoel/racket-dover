@@ -8,7 +8,8 @@
          racket/promise
          "coverage.rkt")
 
-(provide write-text-report
+(provide current-internal-module-fix
+         write-text-report
          write-json-report
          write-scribble-stubs)
 
@@ -59,18 +60,26 @@
      (format "~a: the docs say this module exports ~a, but it doesn't"
              (module->string mod) (binding-id b))]))
 
+;; Given a checked module, returns how to stop checking it (for example, "list it in
+;; dover-consider-private"), or #f if there is nothing to suggest. This depends on the reason the
+;; module was checked, which only the caller knows.
+(define current-internal-module-fix
+  (make-parameter (λ (_mod) "list it in dover-consider-private")))
+
 (define (warning-fix w)
   (match-define (doc-warning b mod) w)
   (define doc-mods (binding-doc-modules b))
   (match w
     [(? unreachable-docs-warning?)
-     (format (string-append "add ~a to the #:use-sources of the defmodule or declare-exporting~a;"
-                            " or, if ~a is internal, list it in dover-consider-private")
+     (define internal-fix ((current-internal-module-fix) mod))
+     (format "add ~a to the #:use-sources of the defmodule or declare-exporting~a~a"
              (module->string (binding-source-module b))
              (if (null? doc-mods)
                  " that documents it"
                  (format " for ~a" (module->string (car doc-mods))))
-             (module->string mod))]
+             (if internal-fix
+                 (format "; or, if ~a is internal, ~a" (module->string mod) internal-fix)
+                 ""))]
     [(? export-claim-warning?)
      (format "remove ~a from the declare-exporting that documents ~a, or provide ~a from ~a"
              (module->string mod) (binding-id b) (binding-id b) (module->string mod))]))

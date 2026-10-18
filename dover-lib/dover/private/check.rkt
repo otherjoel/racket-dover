@@ -78,6 +78,25 @@
     (raise-user-error who "--format must be text, json or stubs, given: ~a" str))
   fmt)
 
+;; True for a module in a private/ directory
+(define (in-private-dir? mod)
+  (and (symbol? mod) (member "private" (string-split (symbol->string mod) "/")) #t))
+
+;; How to stop checking mod, given the reason it was checked; see current-internal-module-fix.
+(define (internal-fix-for mod
+                          #:never-ignore never-ignore
+                          #:consider-private consider-private
+                          #:include-private? include-private?)
+  (define private? (or (in-private-dir? mod) (and (member mod consider-private) #t)))
+  (cond
+    [(member mod never-ignore)
+     (if private?
+         "remove it from dover-never-ignore"
+         "remove it from dover-never-ignore and list it in dover-consider-private")]
+    [(and private? include-private?) #f] ; the user asked to check private modules
+    ;; Also covers a module in a private/ directory that is listed in dover-modules
+    [else "list it in dover-consider-private"]))
+
 ;; Returns the process exit status.
 (define (run-check pkgs
                    #:include-private? include-private?
@@ -94,6 +113,15 @@
   (define ignore (append (append-map config-ignore configs) extra-ignore))
   (define min-coverage (or cli-min (ormap config-min-coverage configs)))
   (define report (check-coverage mods #:packages pkgs #:ignore ignore))
+  (define never-ignore (append-map (λ (c) (map normalize-module-path (config-never-ignore c)))
+                                   configs))
+  (define consider-private
+    (append-map (λ (c) (map normalize-module-path (config-consider-private c))) configs))
+  (define (internal-module-fix mod)
+    (internal-fix-for mod
+                      #:never-ignore never-ignore
+                      #:consider-private consider-private
+                      #:include-private? include-private?))
   (define ratio (coverage-ratio (coverage-report-scored report)))
 
   (define notices
@@ -105,10 +133,11 @@
                        (string-join pkgs ", ") (string-join pkgs " ")))
          '())))
 
-  (case fmt
-    [(text) (write-text-report report pkgs)]
-    [(json) (write-json-report report pkgs notices)]
-    [(stubs) (write-scribble-stubs report)])
+  (parameterize ([current-internal-module-fix internal-module-fix])
+    (case fmt
+      [(text) (write-text-report report pkgs)]
+      [(json) (write-json-report report pkgs notices)]
+      [(stubs) (write-scribble-stubs report)]))
   (flush-output)
   (unless (eq? fmt 'json)
     (for ([n (in-list notices)])
@@ -158,6 +187,23 @@
 
 (module+ test
   (require rackunit)
+  (define (fix mod #:include-private? [ip? #f])
+    (internal-fix-for mod
+                      #:never-ignore '(p/a p/private/x)
+                      #:consider-private '(p/a p/b)
+                      #:include-private? ip?))
+  (check-equal? (fix 'p/a) "remove it from dover-never-ignore")
+  (check-equal? (fix 'p/private/x) "remove it from dover-never-ignore")
+  (check-false (fix 'p/b #:include-private? #t))
+  (check-false (fix 'p/private/y #:include-private? #t))
+  (check-equal? (fix 'p/c) "list it in dover-consider-private")
+  (check-equal? (fix 'p/private/y) "list it in dover-consider-private")
+  (check-equal? (internal-fix-for 'p/c
+                                  #:never-ignore '(p/c)
+                                  #:consider-private '()
+                                  #:include-private? #f)
+                "remove it from dover-never-ignore and list it in dover-consider-private")
+
   (check-equal? (parse-ignore "a/b") 'a/b)
   (check-equal? (parse-ignore "a/b:foo") '(a/b foo))
   (check-equal? (parse-ignore "a/b:struct:foo") '(a/b struct:foo))
