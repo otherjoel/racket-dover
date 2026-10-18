@@ -1,0 +1,22 @@
+raco dover check -f stubs tally
+@;================================================
+
+@defmodule[tally]
+
+@defform[(with-counter arg)
+         #:contracts ([arg any/c])]{
+
+with-counter form
+
+}
+
+@;================================================
+
+@defmodule[tally/base]
+
+@defproc[(counter-value [arg any/c]) any/c]{
+
+counter-value proc
+
+}
+

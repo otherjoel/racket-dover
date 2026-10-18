@@ -1,6 +1,7 @@
 #lang scribble/manual
 
 @(require scribble/bnf
+          "terminal.rkt"
           (for-label dover
                      racket/base
                      racket/contract
@@ -16,6 +17,53 @@ Dover reads the documentation that is already installed, so a package's docs mus
 (normally by @exec{raco pkg install} or @exec{raco setup}) before Dover can see them.
 
 @table-of-contents[]
+
+@section[#:tag "tour"]{Quick tour}
+
+This section checks a small package called @racketidfont{tally}. A private module defines a
+counter:
+
+@tour-file["tally/private/counter.rkt"]
+
+The @racketidfont{tally/base} module re-exports the counter on its own, and the main
+@racketidfont{tally} module re-exports @racketidfont{tally/base} and adds two bindings of its own:
+
+@tour-file["tally/base.rkt"]
+@tour-file["tally/main.rkt"]
+
+The package's docs cover most, but not all, of these bindings:
+
+@tour-file["tally/scribblings/tally.scrbl"]
+
+After installing the package, which also builds its docs, check it:
+
+@tour-output["check"]
+
+Two bindings have no documentation. Dover reports @racketidfont{with-counter} under
+@racketidfont{tally}, which defines it. It reports @racketidfont{counter-value} under
+@racketidfont{tally/base}, because the module that defines it is private and
+@racketidfont{tally/base} is the first checked module that re-exports it. (See
+@secref["grouping"].)
+
+The warnings say that a program that requires @racketidfont{tally/base} gets no links to the
+docs for @racketidfont{counter?}, @racketidfont{make-counter} and @racketidfont{counter-add!}. The
+docs are keyed to @racketidfont{tally}, and @racketidfont{tally/base} gets these bindings straight
+from the private module without going through @racketidfont{tally}. (See @secref["warnings"].)
+
+To start on the missing docs, ask for stubs:
+
+@tour-output["stubs"]
+
+Each stub is under a @racket[defmodule] for the module that the binding is reported under. Here,
+@racketidfont{counter-value} belongs with the rest of the counter, so the fixed docs put it under
+@racketidfont{tally} instead. They also add the @racket[#:use-sources] that the warnings suggest:
+
+@tour-file["tally-fixed.scrbl" #:as "tally/scribblings/tally.scrbl"]
+
+After rebuilding the docs, the check comes back clean:
+
+@commandline{raco setup --pkgs tally}
+@tour-output["check-fixed"]
 
 @section{Checking a package}
 
@@ -128,7 +176,9 @@ suggested fix. Warnings do not affect the coverage score.
        @seclink["warnings"]{documentation warnings}.}
  @item{@Flag{f} @nonterm{format} or @DFlag{format} @nonterm{format} --- choose the output:
        @itemlist[
-        @item{@exec{text} (the default) --- a human-readable report;}
+        @item{@exec{text} (the default) --- a human-readable report, in color when the output
+              is a terminal. Set the @envvar{NO_COLOR} environment variable to turn color off,
+              or @envvar{FORCE_COLOR} to turn it on for output that is not a terminal;}
         @item{@exec{json} --- a JSON object with totals per module (for scored bindings) or per
               package (for unscored ones), the missing bindings with the modules that export
               them, and the documentation warnings with their suggested fixes;}

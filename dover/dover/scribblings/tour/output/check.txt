@@ -1,0 +1,21 @@
+raco dover check tally
+[1mDocumentation coverage: tally(B[m
+──────────────────────────────────────────────────────────────────────
+[33mtally  [missing 1 of 5]:
+(B[m  with-counter
+[31mtally/base  [missing 1 of 1]:
+(B[m  counter-value  (defined in tally/private/counter; exported by tally, tally/base)
+
+     tally [33m████████████████████████████████████████░░░░░░░░░░  80%[90m 4/5(B[m
+tally/base [31m░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   0%[90m 0/1(B[m
+──────────────────────────────────────────────────────────────────────
+     Total [31m█████████████████████████████████░░░░░░░░░░░░░░░░░  67%[90m 4/6(B[m
+
+[1mDocumentation warnings (3)(B[m
+──────────────────────────────────────────────────────────────────────
+[33mtally/base: Scribble can't find the docs for counter-add! from this module(B[m
+  fix: add tally/private/counter to the #:use-sources of the defmodule or declare-exporting for tally; or, if tally/base is internal, list it in dover-consider-private
+[33mtally/base: Scribble can't find the docs for counter? from this module(B[m
+  fix: add tally/private/counter to the #:use-sources of the defmodule or declare-exporting for tally; or, if tally/base is internal, list it in dover-consider-private
+[33mtally/base: Scribble can't find the docs for make-counter from this module(B[m
+  fix: add tally/private/counter to the #:use-sources of the defmodule or declare-exporting for tally; or, if tally/base is internal, list it in dover-consider-private

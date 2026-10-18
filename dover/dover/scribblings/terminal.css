@@ -1,0 +1,24 @@
+.terminal {
+    margin: 1em 0;
+    padding: 0.5em 0.75em;
+    background: #fafafa;
+    border: 1px solid silver;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.terminal .SVerbatim,
+.terminal .SVerbatim td {
+    line-height: 1.25;
+}
+
+.term-prompt::before {
+    content: "$ ";
+    color: #888;
+}
+
+.term-bold { font-weight: bold; }
+.term-red { color: #c00; }
+.term-green { color: #080; }
+.term-yellow { color: #a60; }
+.term-gray { color: #888; }

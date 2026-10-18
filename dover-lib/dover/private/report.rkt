@@ -87,8 +87,14 @@
 ;;================================================
 ;; Terminal output
 
-(define color? (delay (and (terminal-port? (current-output-port))
+;; FORCE_COLOR turns on color even when the output is not a terminal (see force-color.org)
+(define color? (delay (and (or (terminal-port? (current-output-port))
+                               (non-empty-env? "FORCE_COLOR"))
                            (not (getenv "NO_COLOR")))))
+
+(define (non-empty-env? name)
+  (define v (getenv name))
+  (and v (not (string=? v "")) #t))
 
 (define (term-bytes . b)
   (when (force color?) (for-each write-bytes b)))
