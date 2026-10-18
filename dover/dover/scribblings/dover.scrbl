@@ -25,7 +25,7 @@ by @exec{raco pkg install} or @exec{raco setup}) before Dover can see them.
 
 @section[#:tag "tour"]{Quick tour}
 
-Suppose you have written a small package called @racketidfont{tally}:
+Suppose you have written a small package called @tt{tally}:
 
 @tour-tree["tally"]
 
@@ -33,8 +33,8 @@ The private module defines a counter:
 
 @tour-file["tally/private/counter.rkt"]
 
-The @racketidfont{tally/base} module re-exports the counter on its own, and the main
-@racketidfont{tally} module re-exports @racketidfont{tally/base} and adds two bindings of its own:
+The @racketmodfont{tally/base} module re-exports the counter on its own, and the main
+@racketmodfont{tally} module re-exports @racketmodfont{tally/base} and adds two bindings of its own:
 
 @tour-file["tally/base.rkt"]
 @tour-file["tally/main.rkt"]
@@ -47,25 +47,25 @@ After installing the package, which also builds its docs, check it:
 
 @tour-output["check"]
 
-Two bindings have no documentation, and Dover reports both under @racketidfont{tally}. That module
+Two bindings have no documentation, and Dover reports both under @racketmodfont{tally}. That module
 defines @racketidfont{with-counter}. The private module defines @racketidfont{counter-value}, along
 with @racketidfont{counter?}, @racketidfont{make-counter} and @racketidfont{counter-add!}, which
-are documented under @racketidfont{tally}, so Dover reports @racketidfont{counter-value} there too.
+are documented under @racketmodfont{tally}, so Dover reports @racketidfont{counter-value} there too.
 (See @secref["grouping"].)
 
-Additionally, the warnings say that a program that requires @racketidfont{tally/base} gets no links
+Additionally, the warnings say that a program that requires @racketmodfont{tally/base} gets no links
 to the docs for @racketidfont{counter?}, @racketidfont{make-counter} and
 @racketidfont{counter-add!}. This is because the @racket[defproc] forms for those bindings are
-inside a section that declares it is documenting bindings from @racketidfont{tally}, and
-@racketidfont{tally/base} gets these bindings straight from the private module without going through
-@racketidfont{tally}. (See @secref["warnings"].)
+inside a section that declares it is documenting bindings from @racketmodfont{tally}, and
+@racketmodfont{tally/base} gets these bindings straight from the private module without going through
+@racketmodfont{tally}. (See @secref["warnings"].)
 
 To start on the missing docs, you can ask for stubs using the @Flag{f} or @DFlag{format} flag and
 specifying @tt{stubs} as the output format:
 
 @tour-output["stubs"]
 
-The stubs are grouped by the module that each binding is reported under. Since @racketidfont{tally}
+The stubs are grouped by the module that each binding is reported under. Since @racketmodfont{tally}
 already has docs, Dover doesn't start a new @racket[defmodule] for it, but says to add the stubs to
 the existing docs. The stub for @racketidfont{counter-value} also names the documented bindings that
 it belongs next to.
@@ -142,18 +142,18 @@ Each scored binding is reported under one of the checked modules that export it:
  @item{A documented binding goes under the first module that its documentation says exports it,
        as given by @racket[defmodule] or @racket[declare-exporting]. For example, after
        @racket[(declare-exporting mypkg/element mypkg/core)], the bindings in that section are
-       reported under @racketidfont{mypkg/element}.}
+       reported under @racketmodfont{mypkg/element}.}
  @item{A missing binding goes with its siblings, the documented bindings defined in the same
        module: it is reported under the module that most of them are reported under, if that
-       module also exports it. So if @racketidfont{mypkg/private/impl} defines several bindings
-       that are documented under @racketidfont{mypkg}, a missing one that @racketidfont{mypkg}
-       also exports is reported under @racketidfont{mypkg}, next to the others.}
+       module also exports it. So if @racketmodfont{mypkg/private/impl} defines several bindings
+       that are documented under @racketmodfont{mypkg}, a missing one that @racketmodfont{mypkg}
+       also exports is reported under @racketmodfont{mypkg}, next to the others.}
  @item{Any other missing binding goes under the checked module nearest to its definition. If the
        module that defines it is checked, that is the module; otherwise it is the first checked
        module that re-exports it, working outward from the definition. So a missing binding
-       defined in @racketidfont{mypkg/private/impl} and re-exported by
-       @racketidfont{mypkg/element} (which is in turn re-exported by @racketidfont{mypkg}) is
-       reported under @racketidfont{mypkg/element}, which is probably where its documentation
+       defined in @racketmodfont{mypkg/private/impl} and re-exported by
+       @racketmodfont{mypkg/element} (which is in turn re-exported by @racketmodfont{mypkg}) is
+       reported under @racketmodfont{mypkg/element}, which is probably where its documentation
        belongs.}
 ]
 
@@ -169,14 +169,14 @@ suggested fix. Warnings do not affect the coverage score.
        lead to its documentation, so that a program requiring that module gets links to the
        docs. Scribble looks up a binding by following its re-exports from the required module
        toward the definition, looking for the module the docs were keyed to. If the docs use
-       @racket[(defmodule mypkg/a)] but @racketidfont{mypkg/b} re-exports the binding straight
-       from the module that defines it, the lookup from @racketidfont{mypkg/b} never passes
-       through @racketidfont{mypkg/a} and fails.
+       @racket[(defmodule mypkg/a)] but @racketmodfont{mypkg/b} re-exports the binding straight
+       from the module that defines it, the lookup from @racketmodfont{mypkg/b} never passes
+       through @racketmodfont{mypkg/a} and fails.
 
        To fix it, add the defining module to the @racket[#:use-sources] of the
        @racket[defmodule] or @racket[declare-exporting], which keys the docs to the definition
-       so that every re-export reaches them. (Adding @racketidfont{mypkg/b} to
-       @racket[declare-exporting] does not help.) If @racketidfont{mypkg/b} is an internal
+       so that every re-export reaches them. (Adding @racketmodfont{mypkg/b} to
+       @racket[declare-exporting] does not help.) If @racketmodfont{mypkg/b} is an internal
        module that users should not require, list it in @racketidfont{dover-consider-private}
        instead.}
 
@@ -244,8 +244,8 @@ optional.
        ]
 
        Unlike @racketidfont{dover-ignore}, this does not remove any bindings from the check: a
-       binding defined in @racketidfont{mypkg/components/email} and re-exported by
-       @racketidfont{mypkg} is still counted, and still needs documentation.}
+       binding defined in @racketmodfont{mypkg/components/email} and re-exported by
+       @racketmodfont{mypkg} is still counted, and still needs documentation.}
 
  @item{@racketidfont{dover-never-ignore} --- a list of modules that Dover always checks, even
        if they are in a @filepath{private} directory or listed in
