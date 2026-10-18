@@ -1,10 +1,12 @@
 .terminal {
     margin: 1em 0;
-    padding: 0.5em 0.75em;
-    background: #fafafa;
-    border: 1px solid silver;
-    border-radius: 4px;
-    overflow-x: auto;
+    font-size: 0.85rem;
+}
+
+/* manual-style.css sets these to 1rem */
+.terminal .stt,
+.terminal .hspace {
+    font-size: inherit;
 }
 
 .terminal .SVerbatim,
@@ -22,3 +24,18 @@
 .term-green { color: #080; }
 .term-yellow { color: #a60; }
 .term-gray { color: #888; }
+
+/* Code added to a file shown by tour-file */
+.tour-added {
+    background: #dfd;
+}
+
+/* On narrow screens (manual-style.css switches to its mobile layout at 720px), scroll wide
+   output and code within their own boxes. Otherwise they widen the whole page, and the
+   browser zooms out to fit it. */
+@media all and (max-width: 720px) {
+    .terminal,
+    .tour-file .SCodeFlow {
+        overflow-x: auto;
+    }
+}

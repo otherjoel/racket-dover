@@ -342,6 +342,33 @@
            (for/first ([m (in-list doc-modules)] #:when (member m exporter-mods)) m))
       (nearest-exporter exporters source-module)))
 
+;; A missing binding goes with its siblings, the documented bindings defined in the same module:
+;; under the module that most of them are reported under, if it also exports the missing
+;; binding. Ties go to the module that sorts first. Other missing bindings stay under the
+;; exporter nearest their definition.
+(define (place-with-siblings bindings)
+  (define sibling-modules ; source module -> the modules its documented bindings are reported under
+    (for/fold ([h (hash)]) ([b (in-list bindings)] #:when (binding-documented? b))
+      (hash-update h (binding-source-module b) (λ (ms) (cons (binding-module b) ms)) '())))
+  (for/list ([b (in-list bindings)])
+    (define exporter-mods (map exporter-module (binding-exporters b)))
+    (define counts
+      (for/fold ([h (hash)])
+                ([m (in-list (hash-ref sibling-modules (binding-source-module b) '()))]
+                 #:when (member m exporter-mods))
+        (hash-update h m add1 0)))
+    (cond
+      [(or (binding-documented? b) (hash-empty? counts)) b]
+      [else
+       (define mod
+         (car (sort (hash-keys counts)
+                    (λ (x y) (or (> (hash-ref counts x) (hash-ref counts y))
+                                 (and (= (hash-ref counts x) (hash-ref counts y))
+                                      (module<? x y)))))))
+       (define id (exporter-id (findf (λ (e) (equal? (exporter-module e) mod))
+                                      (binding-exporters b))))
+       (struct-copy binding b [module mod] [id id])])))
+
 ;; Combines one binding's exports (all with the same definition) into a binding.
 (define (raw-exports->binding rs)
   (match-define (raw-export _ _ kind _ src-mod src-id src-pkg) (car rs))
@@ -395,12 +422,13 @@
     (for/hash ([mod (in-list mods)] #:unless (assoc mod errors))
       (values mod #t)))
   (define bindings
-    (for/list ([rs (in-list (group-by (λ (r) (cons (raw-export-source-module r)
-                                                   (raw-export-source-id r)))
-                                      raws))]
-               #:when (raw-export-source-pkg (car rs))
-               #:unless (for/or ([r (in-list rs)]) (ignored? r ignore)))
-      (raw-exports->binding rs)))
+    (place-with-siblings
+     (for/list ([rs (in-list (group-by (λ (r) (cons (raw-export-source-module r)
+                                                    (raw-export-source-id r)))
+                                       raws))]
+                #:when (raw-export-source-pkg (car rs))
+                #:unless (for/or ([r (in-list rs)]) (ignored? r ignore)))
+       (raw-exports->binding rs))))
   (define-values (scored unscored)
     (partition (λ (b) (member (binding-source-pkg b) pkgs)) bindings))
   (coverage-report (bindings->coverage scored)
@@ -470,6 +498,25 @@
   (check-equal? (nearest-exporter (list (exporter 'm/z 'foo '() #f) (exporter 'm/a 'foo '() #f))
                                   'm/private/impl)
                 'm/a)
+
+  ;; Missing bar goes with its documented siblings from m/private/impl under m/a, which exports
+  ;; it too, rather than under m/z, the exporter nearest its definition. Missing baz has no
+  ;; documented siblings, so it stays put.
+  (define (impl-binding id mod doc-modules exporter-mods)
+    (binding mod id 'value 'm/private/impl id "pkg"
+             (for/list ([m (in-list exporter-mods)]) (exporter m id '() (and doc-modules #t)))
+             doc-modules))
+  (define placed
+    (place-with-siblings
+     (list (impl-binding 'foo 'm/a '(m/a) '(m/a m/z))
+           (impl-binding 'qux 'm/a '(m/a) '(m/a))
+           (impl-binding 'bar 'm/z #f '(m/a m/z))
+           (impl-binding 'baz 'm/z #f '(m/b m/z))
+           (binding 'm/z 'zap 'value 'm/private/other 'zap "pkg"
+                    (list (exporter 'm/a 'zap '() #f) (exporter 'm/z 'zap '() #f))
+                    #f))))
+  (check-equal? (map (λ (b) (cons (binding-id b) (binding-module b))) placed)
+                '((foo . m/a) (qux . m/a) (bar . m/a) (baz . m/z) (zap . m/z)))
 
   ;; Warnings: m/b can't reach the docs, and the docs claim m/c exports foo
   (define documented-foo

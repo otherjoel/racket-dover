@@ -54,7 +54,7 @@
   (match-define (doc-warning b mod) w)
   (match w
     [(? unreachable-docs-warning?)
-     (format "~a: Scribble can't find the docs for ~a from this module"
+     (format "~a: ~a is documented, but uses of it from this module can't link to the docs"
              (module->string mod) (id-in b mod))]
     [(? export-claim-warning?)
      (format "~a: the docs say this module exports ~a, but it doesn't"
@@ -66,23 +66,40 @@
 (define current-internal-module-fix
   (make-parameter (λ (_mod) "list it in dover-consider-private")))
 
+;; The parts of an unreachable-docs fix that depend on the binding: the module that defines it,
+;; and the first module its docs say export it (or #f). Bindings with the same key share a fix.
+(define (use-sources-key b)
+  (define doc-mods (binding-doc-modules b))
+  (cons (binding-source-module b) (if (null? doc-mods) #f (car doc-mods))))
+
+;; it : what to call the binding(s) when the docs have no module, such as "it" or "them"
+(define (use-sources-fix key it)
+  (match-define (cons source-mod doc-mod) key)
+  (format "add ~a to the #:use-sources of the defmodule or declare-exporting ~a"
+          (module->string source-mod)
+          (if doc-mod
+              (format "for ~a" (module->string doc-mod))
+              (format "that documents ~a" it))))
+
+;; Returns #f if there is nothing to suggest
+(define (internal-module-fix mod)
+  (define fix ((current-internal-module-fix) mod))
+  (and fix (format "if ~a is internal, ~a" (module->string mod) fix)))
+
+;; ids : what to call the binding(s), such as "foo" or "them"
+(define (export-claim-fix mod docs ids)
+  (format "remove ~a from the declare-exporting that documents ~a, or provide ~a from ~a"
+          (module->string mod) docs ids (module->string mod)))
+
 (define (warning-fix w)
   (match-define (doc-warning b mod) w)
-  (define doc-mods (binding-doc-modules b))
   (match w
     [(? unreachable-docs-warning?)
-     (define internal-fix ((current-internal-module-fix) mod))
-     (format "add ~a to the #:use-sources of the defmodule or declare-exporting~a~a"
-             (module->string (binding-source-module b))
-             (if (null? doc-mods)
-                 " that documents it"
-                 (format " for ~a" (module->string (car doc-mods))))
-             (if internal-fix
-                 (format "; or, if ~a is internal, ~a" (module->string mod) internal-fix)
-                 ""))]
+     (define internal-fix (internal-module-fix mod))
+     (string-append (use-sources-fix (use-sources-key b) "it")
+                    (if internal-fix (string-append "; or, " internal-fix) ""))]
     [(? export-claim-warning?)
-     (format "remove ~a from the declare-exporting that documents ~a, or provide ~a from ~a"
-             (module->string mod) (binding-id b) (binding-id b) (module->string mod))]))
+     (export-claim-fix mod (binding-id b) (binding-id b))]))
 
 ;;================================================
 ;; Terminal output
@@ -189,14 +206,49 @@
   (define-values (documented total) (coverage-totals mcs))
   (write-bar-line "Total" documented total))
 
+;; Groups xs by (key x), in the order in which each key first appears
+(define (group-by-key xs key)
+  (for/list ([k (in-list (remove-duplicates (map key xs)))])
+    (cons k (filter (λ (x) (equal? (key x) k)) xs))))
+
+;; Lists each module once, followed by its warnings of each kind: a description, the bindings,
+;; and the fix.
 (define (write-warnings warnings)
   (write-header (format "Documentation warnings (~a)" (length warnings)))
-  (for ([w (in-list warnings)])
+  (for ([g (in-list (group-by-key warnings doc-warning-module))])
+    (match-define (cons mod ws) g)
     (term-bytes color:yellow)
-    (write-string (warning-message w))
+    (printf "~a:\n" (module->string mod))
     (term-bytes color:reset)
-    (newline)
-    (printf "  fix: ~a\n" (warning-fix w))))
+    (write-unreachable-warnings mod (filter unreachable-docs-warning? ws))
+    (write-export-claim-warnings mod (filter export-claim-warning? ws))))
+
+(define (write-unreachable-warnings mod ws)
+  (unless (null? ws)
+    (define one? (null? (cdr ws)))
+    (printf "  ~a documented, but uses of ~a from this module can't link to the docs:\n"
+            (if one? "This binding is" "These bindings are")
+            (if one? "it" "them"))
+    ;; Bindings that need different #:use-sources are listed separately, each with its fix
+    (for ([g (in-list (group-by-key ws (λ (w) (use-sources-key (doc-warning-binding w)))))])
+      (match-define (cons key g-ws) g)
+      (for ([w (in-list g-ws)])
+        (printf "    ~a\n" (id-in (doc-warning-binding w) mod)))
+      (printf "  fix: ~a\n" (use-sources-fix key (if (null? (cdr g-ws)) "it" "them"))))
+    (define internal-fix (internal-module-fix mod))
+    (when internal-fix
+      (printf "   or: ~a\n" internal-fix))))
+
+(define (write-export-claim-warnings mod ws)
+  (unless (null? ws)
+    (define one? (null? (cdr ws)))
+    (printf "  The docs say this module exports ~a, but it doesn't:\n"
+            (if one? "this binding" "these bindings"))
+    (for ([w (in-list ws)])
+      (printf "    ~a\n" (binding-id (doc-warning-binding w))))
+    (printf "  fix: ~a\n" (if one?
+                              (export-claim-fix mod "it" "it")
+                              (export-claim-fix mod "them" "them")))))
 
 ;; The scored section is grouped by the module each binding is reported under; the unscored
 ;; section by the package that defines it.
@@ -275,25 +327,59 @@
 ;;================================================
 ;; Scribble stubs
 
-(define (stub-scribble-def b)
-  (define id (binding-id b))
-  (case (binding-kind b)
-    [(value)
-     (~a "@defproc[(" id " [arg any/c]) any/c]{\n\n"
-         id " proc\n\n"
-         "}\n\n")]
-    [(syntax)
-     (~a "@defform[(" id " arg)\n"
-         "         #:contracts ([arg any/c])]{\n\n"
-         id " form\n\n"
-         "}\n\n")]))
+;; Comments are gray and the def forms bold, when the output is a terminal
+(define (write-stub-comment str)
+  (term-bytes color:gray)
+  (write-string (~a "@; " str))
+  (term-bytes color:reset)
+  (newline))
 
-;; Prints Scribble stubs for the scored bindings that have no documentation.
+;; Formatted as most of Racket's own docs are: a blank line after the opening brace, and the
+;; closing brace at the end of the text
+(define (write-stub-def b)
+  (define id (binding-id b))
+  (term-bytes color:bold)
+  (case (binding-kind b)
+    [(value) (write-string (~a "@defproc[(" id " [arg any/c]) any/c]{"))]
+    [(syntax) (write-string (~a "@defform[(" id " arg)\n"
+                                "         #:contracts ([arg any/c])]{"))])
+  (term-bytes color:reset)
+  (write-string (~a "\n\n" id (if (eq? (binding-kind b) 'value) " proc" " form") "}\n\n")))
+
+;; Prints Scribble stubs for the scored bindings that have no documentation, grouped by the
+;; module they are reported under. A module that has no docs yet gets a defmodule; for one that
+;; does, a comment says to add the stubs to its docs. A stub for a binding defined in another
+;; module names the documented bindings from that module, which it belongs next to.
 (define (write-scribble-stubs report)
-  (for ([mc (in-list (coverage-report-scored report))])
-    (define missing (module-coverage-missing mc))
-    (unless (null? missing)
-      (write-string (~a "@;================================================\n\n"
-                        "@defmodule[" (module->string (module-coverage-module mc)) "]\n\n"))
-      (for ([b (in-list missing)])
-        (write-string (stub-scribble-def b))))))
+  (define scored (coverage-report-scored report))
+  (define documented-modules
+    (remove-duplicates
+     (for*/list ([mc (in-list scored)]
+                 [b (in-list (module-coverage-documented mc))]
+                 [m (in-list (binding-doc-modules b))])
+       m)))
+  (for ([mc (in-list (filter (λ (mc) (pair? (module-coverage-missing mc))) scored))]
+        [i (in-naturals)])
+    (match-define (module-coverage mod documented missing) mc)
+    (unless (zero? i)
+      (write-stub-comment "================================================")
+      (newline))
+    (cond
+      [(member mod documented-modules)
+       (write-stub-comment (~a "Add to the existing docs for " (module->string mod)))]
+      [else
+       (term-bytes color:bold)
+       (write-string (~a "@defmodule[" (module->string mod) "]"))
+       (term-bytes color:reset)
+       (newline)])
+    (newline)
+    (for ([b (in-list missing)])
+      (define siblings
+        (if (equal? (binding-source-module b) mod)
+            '()
+            (for/list ([d (in-list documented)]
+                       #:when (equal? (binding-source-module d) (binding-source-module b)))
+              (binding-id d))))
+      (unless (null? siblings)
+        (write-stub-comment (~a "Next to " (string-join (map ~a siblings) ", "))))
+      (write-stub-def b))))

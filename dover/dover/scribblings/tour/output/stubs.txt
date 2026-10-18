@@ -1,22 +1,13 @@
 raco dover check -f stubs tally
-@;================================================
+[90m@; Add to the existing docs for tally(B[m
 
-@defmodule[tally]
+[90m@; Next to counter-add!, counter?, make-counter(B[m
+[1m@defproc[(counter-value [arg any/c]) any/c]{(B[m
 
-@defform[(with-counter arg)
-         #:contracts ([arg any/c])]{
+counter-value proc}
 
-with-counter form
+[1m@defform[(with-counter arg)
+         #:contracts ([arg any/c])]{(B[m
 
-}
-
-@;================================================
-
-@defmodule[tally/base]
-
-@defproc[(counter-value [arg any/c]) any/c]{
-
-counter-value proc
-
-}
+with-counter form}
 

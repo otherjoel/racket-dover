@@ -10,18 +10,26 @@
 @title{Dover: Documentation Coverage}
 @author{Joel Dueck}
 
-Dover checks which bindings exported by a package's modules have no Scribble documentation. Use it
-from the command line while you write docs, or in CI to keep coverage from slipping.
+Racket has an amazing dcoumentation system in @seclink["plt-manuals" #:doc '(lib
+"scribblings/scribble/scribble.scrbl")]{Scribble}, and if you’re making Racket packages, you should
+use it.
 
-Dover reads the documentation that is already installed, so a package's docs must be built
-(normally by @exec{raco pkg install} or @exec{raco setup}) before Dover can see them.
+Dover checks a set of one or more packages and scores them on how many of their exported bindings
+have Scribble documentation. Use it from the command line while you write docs, or in CI to keep
+coverage from slipping.
+
+Dover reads the documentation that is already installed, so a package's docs must be built (normally
+by @exec{raco pkg install} or @exec{raco setup}) before Dover can see them.
 
 @table-of-contents[]
 
 @section[#:tag "tour"]{Quick tour}
 
-This section checks a small package called @racketidfont{tally}. A private module defines a
-counter:
+Suppose you have written a small package called @racketidfont{tally}:
+
+@tour-tree["tally"]
+
+The private module defines a counter:
 
 @tour-file["tally/private/counter.rkt"]
 
@@ -39,26 +47,36 @@ After installing the package, which also builds its docs, check it:
 
 @tour-output["check"]
 
-Two bindings have no documentation. Dover reports @racketidfont{with-counter} under
-@racketidfont{tally}, which defines it. It reports @racketidfont{counter-value} under
-@racketidfont{tally/base}, because the module that defines it is private and
-@racketidfont{tally/base} is the first checked module that re-exports it. (See
-@secref["grouping"].)
+Two bindings have no documentation, and Dover reports both under @racketidfont{tally}. That module
+defines @racketidfont{with-counter}. The private module defines @racketidfont{counter-value}, along
+with @racketidfont{counter?}, @racketidfont{make-counter} and @racketidfont{counter-add!}, which
+are documented under @racketidfont{tally}, so Dover reports @racketidfont{counter-value} there too.
+(See @secref["grouping"].)
 
-The warnings say that a program that requires @racketidfont{tally/base} gets no links to the
-docs for @racketidfont{counter?}, @racketidfont{make-counter} and @racketidfont{counter-add!}. The
-docs are keyed to @racketidfont{tally}, and @racketidfont{tally/base} gets these bindings straight
-from the private module without going through @racketidfont{tally}. (See @secref["warnings"].)
+Additionally, the warnings say that a program that requires @racketidfont{tally/base} gets no links
+to the docs for @racketidfont{counter?}, @racketidfont{make-counter} and
+@racketidfont{counter-add!}. This is because the @racket[defproc] forms for those bindings are
+inside a section that declares it is documenting bindings from @racketidfont{tally}, and
+@racketidfont{tally/base} gets these bindings straight from the private module without going through
+@racketidfont{tally}. (See @secref["warnings"].)
 
-To start on the missing docs, ask for stubs:
+To start on the missing docs, you can ask for stubs using the @Flag{f} or @DFlag{format} flag and
+specifying @tt{stubs} as the output format:
 
 @tour-output["stubs"]
 
-Each stub is under a @racket[defmodule] for the module that the binding is reported under. Here,
-@racketidfont{counter-value} belongs with the rest of the counter, so the fixed docs put it under
-@racketidfont{tally} instead. They also add the @racket[#:use-sources] that the warnings suggest:
+The stubs are grouped by the module that each binding is reported under. Since @racketidfont{tally}
+already has docs, Dover doesn't start a new @racket[defmodule] for it, but says to add the stubs to
+the existing docs. The stub for @racketidfont{counter-value} also names the documented bindings that
+it belongs next to.
 
-@tour-file["tally-fixed.scrbl" #:as "tally/scribblings/tally.scrbl"]
+The stubs and the warnings call for separate changes: the stubs fill in the missing docs, and the
+warnings fix the docs that already exist. The fixed docs make both changes, filling in the stubs
+and adding the @racket[#:use-sources] that the warnings suggest:
+
+@tour-file["tally-fixed.scrbl"
+           #:as "tally/scribblings/tally.scrbl"
+           #:added-since "tally/scribblings/tally.scrbl"]
 
 After rebuilding the docs, the check comes back clean:
 
@@ -125,15 +143,21 @@ Each scored binding is reported under one of the checked modules that export it:
        as given by @racket[defmodule] or @racket[declare-exporting]. For example, after
        @racket[(declare-exporting mypkg/element mypkg/core)], the bindings in that section are
        reported under @racketidfont{mypkg/element}.}
- @item{A missing binding goes under the checked module nearest to its definition. If the module
-       that defines it is checked, that is the module; otherwise it is the first checked module
-       that re-exports it, working outward from the definition. So a missing binding defined in
-       @racketidfont{mypkg/private/impl} and re-exported by @racketidfont{mypkg/element} (which
-       is in turn re-exported by @racketidfont{mypkg}) is reported under
-       @racketidfont{mypkg/element}, which is probably where its documentation belongs.}
+ @item{A missing binding goes with its siblings, the documented bindings defined in the same
+       module: it is reported under the module that most of them are reported under, if that
+       module also exports it. So if @racketidfont{mypkg/private/impl} defines several bindings
+       that are documented under @racketidfont{mypkg}, a missing one that @racketidfont{mypkg}
+       also exports is reported under @racketidfont{mypkg}, next to the others.}
+ @item{Any other missing binding goes under the checked module nearest to its definition. If the
+       module that defines it is checked, that is the module; otherwise it is the first checked
+       module that re-exports it, working outward from the definition. So a missing binding
+       defined in @racketidfont{mypkg/private/impl} and re-exported by
+       @racketidfont{mypkg/element} (which is in turn re-exported by @racketidfont{mypkg}) is
+       reported under @racketidfont{mypkg/element}, which is probably where its documentation
+       belongs.}
 ]
 
-When two modules are equally near, the one that sorts first wins.
+When two modules are equally near, or have equally many siblings, the one that sorts first wins.
 
 @subsection[#:tag "warnings"]{Documentation warnings}
 
@@ -183,8 +207,11 @@ suggested fix. Warnings do not affect the coverage score.
               package (for unscored ones), the missing bindings with the modules that export
               them, and the documentation warnings with their suggested fixes;}
         @item{@exec{stubs} --- a @racket[defproc] or @racket[defform] stub for each missing
-              binding, grouped under a @racket[defmodule] for the module it is reported under,
-              ready to paste into a Scribble file and fill in.}]}
+              binding, ready to paste into a Scribble file and fill in. The stubs are grouped by
+              the module they are reported under: under a new @racket[defmodule] if that module
+              has no docs yet, or after a comment saying to add them to its existing docs. A stub
+              for a binding defined in another module names the documented bindings from that
+              module, which it belongs next to.}]}
 ]
 
 @subsection{Configuration in @filepath{info.rkt}}
