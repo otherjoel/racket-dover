@@ -43,36 +43,43 @@ The package's docs cover most, but not all, of these bindings:
 
 @tour-file["tally/scribblings/tally.scrbl"]
 
-After installing the package, which also builds its docs, check it:
+After installing the package, which also builds its docs, check it with @exec{raco dover check}:
 
 @tour-output["check"]
 
-Two bindings have no documentation, and Dover reports both under @racketmodfont{tally}. That module
-defines @racketidfont{with-counter}. The private module defines @racketidfont{counter-value}, along
-with @racketidfont{counter?}, @racketidfont{make-counter} and @racketidfont{counter-add!}, which
-are documented under @racketmodfont{tally}, so Dover reports @racketidfont{counter-value} there too.
-(See @secref["grouping"].)
+Dover finds two bindings that have no documentation, and reports both under the
+@racketmodfont{tally} module. One of those bindings, @racketidfont{with-counter} is actually defined
+in @filepath{tally/main.rkt}, so that makes sense. But the other one, @racketidfont{counter-value},
+is actually defined in the private submodule, then reexported from @racketmodfont{tally/base}
+@emph{and} from @racketmodfont{tally}. So how does Dover decide that documention from
+@racketidfont{counter-value} is supposed to go in the docs for the @racketmodfont{tally} module?
+
+When the same binding comes from multiple places, Dover tries to be smart which module it counts
+them against. In this case it sees that we have already documented most other bindings from
+@racketmodfont{tally/private/counter} (@racketidfont{counter?}, @racketidfont{make-counter} and
+@racketidfont{counter-add!}) in the scribble docs for @racketmodfont{tally}, and that the
+undocumented @racketidfont{counter-value} is also exported from @racketmodfont{tally}. (See
+@secref["grouping"].)
 
 Additionally, the warnings say that a program that requires @racketmodfont{tally/base} gets no links
 to the docs for @racketidfont{counter?}, @racketidfont{make-counter} and
 @racketidfont{counter-add!}. This is because the @racket[defproc] forms for those bindings are
 inside a section that declares it is documenting bindings from @racketmodfont{tally}, and
-@racketmodfont{tally/base} gets these bindings straight from the private module without going through
-@racketmodfont{tally}. (See @secref["warnings"].)
+@racketmodfont{tally/base} gets these bindings straight from the private module without going
+through @racketmodfont{tally}. (See @secref["warnings"].)
 
-To start on the missing docs, you can ask for stubs using the @Flag{f} or @DFlag{format} flag and
-specifying @tt{stubs} as the output format:
+To start on the missing documentation, you can ask for stubs using the @Flag{f} (or @DFlag{format})
+flag and specifying @tt{stubs} as the output format:
 
 @tour-output["stubs"]
 
 The stubs are grouped by the module that each binding is reported under. Since @racketmodfont{tally}
-already has docs, Dover doesn't start a new @racket[defmodule] for it, but says to add the stubs to
-the existing docs. The stub for @racketidfont{counter-value} also names the documented bindings that
-it belongs next to.
+already has docs, Dover doesn't start a new @racket[defmodule] for it, but suggests adding the stubs
+under the existing @racket[defmodule]. The stub for @racketidfont{counter-value} also suggests adding
+it near the docs for the bindings defined alongside it.
 
-The stubs and the warnings call for separate changes: the stubs fill in the missing docs, and the
-warnings fix the docs that already exist. The fixed docs make both changes, filling in the stubs
-and adding the @racket[#:use-sources] that the warnings suggest:
+Now we’ll fix the docs by adding in the missing stubs and filling them in, and by adding the
+@racket[#:use-sources] that the warnings suggest:
 
 @tour-file["tally-fixed.scrbl"
            #:as "tally/scribblings/tally.scrbl"
