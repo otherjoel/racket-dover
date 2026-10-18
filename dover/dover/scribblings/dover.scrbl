@@ -3,7 +3,8 @@
 @(require scribble/bnf
           (for-label dover
                      racket/base
-                     racket/contract))
+                     racket/contract
+                     scribble/manual))
 
 @title{Dover: Documentation Coverage}
 @author{Joel Dueck}
@@ -57,21 +58,51 @@ scores it according to which package that module belongs to:
        is skipped.}
 ]
 
-Scored bindings are reported under the module that exports them. When more than one checked module
-exports the same binding, it is counted once, under the first module in sorted order. Since a module sorts before the modules nested under it, a binding exported
-by both @racketidfont{mypkg} and @racketidfont{mypkg/util} is reported under
-@racketidfont{mypkg}.
+A binding is counted once, however many checked modules export it. It is @deftech{documented} if
+Scribble can find its documentation from at least one of those modules, and @deftech{missing}
+otherwise. Only documented bindings count as covered.
 
-Each binding gets one of three statuses:
+@subsection[#:tag "grouping"]{Where bindings are reported}
+
+Each scored binding is reported under one of the checked modules that export it:
 
 @itemlist[
- @item{@racket['documented] --- Scribble can find documentation for the binding from the module
-       that exports it.}
- @item{@racket['unreachable] --- Scribble can find documentation for the binding from one of the
-       modules it passes through on the way from its definition, but not from the module that
-       exports it. This usually means the docs use @racket[defmodule] for a different module than
-       the one users require. Only documented bindings count as covered.}
- @item{@racket['missing] --- no documentation was found.}
+ @item{A documented binding goes under the first module that its documentation says exports it,
+       as given by @racket[defmodule] or @racket[declare-exporting]. For example, after
+       @racket[(declare-exporting mypkg/element mypkg/core)], the bindings in that section are
+       reported under @racketidfont{mypkg/element}.}
+ @item{A missing binding goes under the checked module nearest to its definition. If the module
+       that defines it is checked, that is the module; otherwise it is the first checked module
+       that re-exports it, working outward from the definition. So a missing binding defined in
+       @racketidfont{mypkg/private/impl} and re-exported by @racketidfont{mypkg/element} (which
+       is in turn re-exported by @racketidfont{mypkg}) is reported under
+       @racketidfont{mypkg/element}, which is probably where its documentation belongs.}
+]
+
+When two modules are equally near, the one that sorts first wins.
+
+@subsection[#:tag "warnings"]{Documentation warnings}
+
+Besides missing documentation, Dover reports two problems with documented bindings, each with a
+suggested fix. Warnings do not affect the coverage score.
+
+@itemlist[
+ @item{@bold{Docs not reachable from a module.} Every checked module that exports a binding should
+       lead to its documentation, so that a program requiring that module gets links to the
+       docs. Scribble looks up a binding by following its re-exports from the required module
+       toward the definition, looking for the module the docs were keyed to. If the docs use
+       @racket[(defmodule mypkg/a)] but @racketidfont{mypkg/b} re-exports the binding straight
+       from the module that defines it, the lookup from @racketidfont{mypkg/b} never passes
+       through @racketidfont{mypkg/a} and fails.
+
+       To fix it, add the defining module to the @racket[#:use-sources] of the
+       @racket[defmodule] or @racket[declare-exporting], which keys the docs to the definition
+       so that every re-export reaches them. (Adding @racketidfont{mypkg/b} to
+       @racket[declare-exporting] does not help.)}
+
+ @item{@bold{Incorrect export claim.} The docs say a checked module exports a binding (through
+       @racket[defmodule] or @racket[declare-exporting]), but the module doesn't. Either remove
+       the module from the declaration or export the binding from it.}
 ]
 
 @subsection{Command-line flags}
@@ -80,19 +111,21 @@ Each binding gets one of three statuses:
  @item{@DFlag{include-private} --- also check modules in @filepath{private} directories.}
  @item{@DFlag{ignore} @nonterm{module} or @DFlag{ignore} @nonterm{module}@litchar{:}@nonterm{id}
        --- ignore every binding from @nonterm{module}, or just the binding @nonterm{id}. The
-       @nonterm{module} can be either the module that exports the binding or the one that defines
-       it. This flag can be given more than once.}
+       @nonterm{module} can be any module that exports the binding or the one that defines it.
+       This flag can be given more than once.}
  @item{@DFlag{min} @nonterm{percent} --- exit with status 1 if coverage is below
        @nonterm{percent}. Overrides @racketidfont{dover-min-coverage}.}
+ @item{@DFlag{strict} --- exit with status 1 if there are any
+       @seclink["warnings"]{documentation warnings}.}
  @item{@Flag{f} @nonterm{format} or @DFlag{format} @nonterm{format} --- choose the output:
        @itemlist[
         @item{@exec{text} (the default) --- a human-readable report;}
         @item{@exec{json} --- a JSON object with totals per module (for scored bindings) or per
-              package (for unscored ones), the bindings that are missing or unreachable, and any
-              warnings;}
+              package (for unscored ones), the missing bindings with the modules that export
+              them, and the documentation warnings with their suggested fixes;}
         @item{@exec{stubs} --- a @racket[defproc] or @racket[defform] stub for each missing
-              binding, grouped under a @racket[defmodule] for its module, ready to paste into a
-              Scribble file and fill in.}]}
+              binding, grouped under a @racket[defmodule] for the module it is reported under,
+              ready to paste into a Scribble file and fill in.}]}
 ]
 
 @subsection{Configuration in @filepath{info.rkt}}
@@ -134,7 +167,7 @@ optional.
 
 After installing your package and building its docs, run:
 
-@commandline{raco dover check --min 100 mypkg-lib}
+@commandline{raco dover check --strict --min 100 mypkg-lib}
 
 For a package split into @filepath{-lib} and @filepath{-doc} packages, check the package that
 contains the modules, since that is where the bindings are defined.
@@ -152,26 +185,54 @@ on.
                      [source-module module-path?]
                      [source-id symbol?]
                      [source-pkg (or/c string? #f)]
-                     [via (listof (cons/c module-path? symbol?))])]{
-An exported binding. The @racket[module] and @racket[id] fields give the module that exports the
-binding and the name it is exported under. The @racket[source-module] and @racket[source-id] fields
-give the module where it is defined and its name there, and @racket[source-pkg] names the package
-containing @racket[source-module], or is @racket[#f] for Racket's main collections. The
-@racket[via] field lists the modules, and the binding's names in them, that the binding passes
-through between @racket[module] and @racket[source-module].}
+                     [exporters (listof exporter?)]
+                     [doc-modules (or/c (listof module-path?) #f)])]{
+A binding, identified by where it is defined. The @racket[module] and @racket[id] fields give the
+module it is reported under (see @secref["grouping"]) and its name there. The
+@racket[source-module] and @racket[source-id] fields give the module where it is defined and its
+name there, and @racket[source-pkg] names the package containing @racket[source-module], or is
+@racket[#f] for Racket's main collections. The @racket[exporters] field lists every checked module
+that exports the binding.
+
+The @racket[doc-modules] field is @racket[#f] if the binding is @tech{missing}. Otherwise it lists
+the modules that the documentation says export the binding.}
+
+@defstruct*[exporter ([module module-path?]
+                      [id symbol?]
+                      [via (listof (cons/c module-path? symbol?))]
+                      [documented? boolean?])]{
+A checked module that exports a binding, under the name @racket[id]. The @racket[via] field lists
+the modules, and the binding's names in them, that the binding passes through between
+@racket[module] and the module that defines it. The @racket[documented?] field says whether
+Scribble can find the binding's documentation from @racket[module].}
+
+@defproc[(binding-documented? [b binding?]) boolean?]{
+Returns @racket[#t] if @racket[b] is @tech{documented}.}
 
 @defstruct*[module-coverage ([module module-path?]
                              [documented (listof binding?)]
-                             [unreachable (listof binding?)]
                              [missing (listof binding?)])]{
-The bindings exported from @racket[module], sorted by status. See @racket[binding-doc-status].}
+The bindings reported under @racket[module], divided into @tech{documented} and @tech{missing}.}
+
+@defstruct*[doc-warning ([binding binding?] [module module-path?])]{
+A @seclink["warnings"]{documentation warning} about @racket[binding] and @racket[module]. Only its
+subtypes are instantiated.}
+
+@defstruct*[(unreachable-docs-warning doc-warning) ()]{
+Scribble can't find the documentation for the warning's binding from its module, which exports
+the binding.}
+
+@defstruct*[(export-claim-warning doc-warning) ()]{
+The documentation says the warning's module exports its binding, but the module doesn't.}
 
 @defstruct*[coverage-report ([scored (listof module-coverage?)]
                              [unscored (listof module-coverage?)]
+                             [warnings (listof doc-warning?)]
                              [errors (listof (cons/c module-path? string?))])]{
 The result of @racket[check-coverage]. The @racket[scored] field covers bindings defined in the
 checked packages, and @racket[unscored] covers bindings re-exported from other packages. The
-@racket[errors] field pairs each module that could not be loaded with the error message.}
+@racket[warnings] field holds the documentation warnings for scored bindings. The @racket[errors]
+field pairs each module that could not be loaded with the error message.}
 
 @defproc[(package-modules [pkg string?]
                           [#:include-private? include-private? any/c #f])
@@ -180,24 +241,16 @@ Returns the modules in the installed package @racket[pkg], following the rules i
 @secref["modules"], sorted so that each module comes before the modules nested
 under it.}
 
-@defproc[(module-bindings [mod module-path?]) (listof binding?)]{
-Declares @racket[mod] in the current namespace, without instantiating it, and returns the bindings
-it exports at phase 0. Raises an exception if @racket[mod] cannot be found or loaded.}
-
-@defproc[(binding-doc-status [b binding?]) (or/c 'documented 'unreachable 'missing)]{
-Looks @racket[b] up in the installed documentation. See @secref["bindings"] for the
-meaning of each result.}
-
 @defproc[(check-coverage [mods (listof module-path?)]
                          [#:packages pkgs (listof string?)]
                          [#:ignore ignore list? '()])
          coverage-report?]{
-Checks the bindings exported by @racket[mods] in a fresh namespace. Bindings defined in one of
-@racket[pkgs] are scored; see @secref["bindings"]. Each element of @racket[ignore] has
-the same form as an element of @racketidfont{dover-ignore}.}
+Checks the bindings exported by @racket[mods], declaring (but not instantiating) each module in a
+fresh namespace. Bindings defined in one of @racket[pkgs] are scored; see @secref["bindings"].
+Each element of @racket[ignore] has the same form as an element of @racketidfont{dover-ignore}.}
 
 @defproc[(module-coverage-total [mc module-coverage?]) exact-nonnegative-integer?]{
-Returns the number of bindings in @racket[mc], whatever their status.}
+Returns the number of bindings in @racket[mc], documented or not.}
 
 @defproc[(coverage-ratio [mcs (listof module-coverage?)]) (or/c (between/c 0 1) #f)]{
 Returns the fraction of the bindings in @racket[mcs] that are documented, or @racket[#f] if

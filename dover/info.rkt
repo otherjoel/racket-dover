@@ -3,7 +3,7 @@
 (define collection 'multi)
 (define deps '("base" "dover-lib"))
 (define implies '("dover-lib"))
-(define build-deps '("scribble-lib" "racket-doc"))
+(define build-deps '("scribble-lib" "scribble-doc" "racket-doc"))
 (define pkg-desc "Check Scribble documentation coverage for Racket packages")
 (define version "0.1")
 (define pkg-authors '("Joel Dueck"))

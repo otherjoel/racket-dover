@@ -8,20 +8,24 @@
          racket/path
          racket/promise
          racket/string
+         scribble/manual-struct
+         scribble/core
          scribble/xref
          setup/collects
          setup/getinfo
          setup/xref)
 
 (provide (struct-out binding)
+         (struct-out exporter)
          (struct-out module-coverage)
+         (struct-out doc-warning)
+         (struct-out unreachable-docs-warning)
+         (struct-out export-claim-warning)
          (struct-out coverage-report)
          normalize-module-path
          module<?
          package-modules
-         module-bindings
-         binding-doc-status
-         binding-documented-via
+         binding-documented?
          check-coverage
          module-coverage-total
          coverage-totals
@@ -30,21 +34,41 @@
 ;;================================================
 ;; Data
 
-;; module    : the module being checked that exports the binding
-;; id        : the name it is exported under
-;; kind      : 'value or 'syntax
-;; source-*  : where the binding is originally defined, and the package that module belongs to
-;;             (#f for Racket's main collections)
-;; via       : (listof (cons module-path symbol)), the modules and names the binding passes
-;;             through between module and source-module
-(struct binding (module id kind source-module source-id source-pkg via) #:transparent)
+;; A checked module that exports a binding.
+;; module      : the module
+;; id          : the name it exports the binding under
+;; via         : (listof (cons module-path symbol)), the modules and names the binding passes
+;;               through between module and the definition
+;; documented? : whether Scribble can find the binding's docs from module
+(struct exporter (module id via documented?) #:transparent)
 
-(struct module-coverage (module documented unreachable missing) #:transparent)
+;; A binding, identified by where it is defined.
+;; module, id  : the module it is reported under and its name there
+;; kind        : 'value or 'syntax
+;; source-*    : where it is originally defined, and the package that module belongs to
+;; exporters   : (listof exporter), every checked module that exports it
+;; doc-modules : #f if Scribble can't find docs for it; otherwise the modules the docs say export
+;;               it (from defmodule or declare-exporting)
+(struct binding (module id kind source-module source-id source-pkg exporters doc-modules)
+  #:transparent)
+
+(struct module-coverage (module documented missing) #:transparent)
+
+;; Documentation hygiene problems for a documented binding
+(struct doc-warning (binding module) #:transparent)
+;; Scribble can't find the binding's docs from module, which exports it
+(struct unreachable-docs-warning doc-warning () #:transparent)
+;; The docs say module exports the binding, but it doesn't
+(struct export-claim-warning doc-warning () #:transparent)
 
 ;; scored   : module-coverage for bindings defined in the packages being checked
 ;; unscored : module-coverage for bindings re-exported from other packages
+;; warnings : (listof doc-warning) for scored bindings
 ;; errors   : (listof (cons module-path string)) for modules that could not be loaded
-(struct coverage-report (scored unscored errors) #:transparent)
+(struct coverage-report (scored unscored warnings errors) #:transparent)
+
+(define (binding-documented? b)
+  (and (binding-doc-modules b) #t))
 
 ;;================================================
 ;; Module paths
@@ -233,56 +257,52 @@
        (match-define (and hop (cons mpi name)) (pick-origin id origins rel-to))
        (cons hop (loop name (or (export-origins mpi name) '()) mpi (sub1 fuel)))])))
 
+;; One module's export of a binding, before exports of the same binding are combined
+(struct raw-export (module id kind via source-module source-id source-pkg))
+
 ;; Declares (but does not instantiate) mod in the current namespace and returns the bindings it
 ;; exports at phase 0.
-(define (module-bindings mod)
+(define (module-exports mod)
   (unless (module-declared? mod #t)
-    (raise-arguments-error 'module-bindings "module not found" "module" mod))
+    (raise-arguments-error 'module-exports "module not found" "module" mod))
   (define-values (vars forms) (module->exports mod))
   (define mod-pkg (module-package mod))
   (define mod-mpi (module-path-index-join mod #f))
-  (define (exports->bindings exports kind)
+  (define (exports->raw exports kind)
     (for/list ([export (in-list (phase-0-exports exports))])
       (match-define (list id origins) export)
       (match (reexport-hops id origins mod-mpi)
-        ['() (binding mod id kind mod id mod-pkg '())]
+        ['() (raw-export mod id kind '() mod id mod-pkg)]
         [hops
          (match-define (cons def-mpi def-id) (last hops))
-         (binding mod id kind (mpi->module-path def-mpi) def-id (module-package def-mpi)
-                  (for/list ([hop (in-list (drop-right hops 1))])
-                    (cons (mpi->module-path (car hop)) (cdr hop))))])))
-  (append (exports->bindings vars 'value)
-          (exports->bindings forms 'syntax)))
+         (raw-export mod id kind
+                     (for/list ([hop (in-list (drop-right hops 1))])
+                       (cons (mpi->module-path (car hop)) (cdr hop)))
+                     (mpi->module-path def-mpi) def-id (module-package def-mpi))])))
+  (append (exports->raw vars 'value)
+          (exports->raw forms 'syntax)))
 
 ;;================================================
 ;; Checking Scribble docs
 
 (define collections-xref (delay (load-collections-xref)))
 
-(define (has-definition-tag? mod id)
+(define (definition-tag mod id)
   (with-handlers ([exn:fail? (λ (_e) #f)])
-    (and (xref-binding->definition-tag (force collections-xref) (list mod id) #f) #t)))
+    (xref-binding->definition-tag (force collections-xref) (list mod id) #f)))
 
-;; Returns the first module, after the exporting module, through which Scribble can find
-;; documentation for b, or #f.
-(define (binding-documented-via b)
-  (for/first ([hop (in-list (append (binding-via b)
-                                    (list (cons (binding-source-module b) (binding-source-id b)))))]
-              #:when (has-definition-tag? (car hop) (cdr hop)))
-    (car hop)))
-
-;; 'unreachable = documented through a module the binding passes through on the way from its
-;; definition, but Scribble can't get there from the module that exports it
-(define (binding-doc-status b)
-  (cond
-    [(has-definition-tag? (binding-module b) (binding-id b)) 'documented]
-    [(binding-documented-via b) 'unreachable]
-    [else 'missing]))
+;; Returns the modules that the docs say export the binding, as found from mod.
+(define (documented-exporting-modules mod id)
+  (define entry (xref-tag->index-entry (force collections-xref) (definition-tag mod id)))
+  (define desc (and entry (entry-desc entry)))
+  (if (exported-index-desc? desc)
+      (remove-duplicates (map normalize-module-path (exported-index-desc-from-libs desc)))
+      '()))
 
 ;; Each element of ignore is a module path (ignore every binding exported from or defined in that
 ;; module) or a list of a module path and ids (ignore only those ids).
-(define (ignored? b ignore)
-  (match-define (binding mod id _ src-mod src-id _ _) b)
+(define (ignored? r ignore)
+  (match-define (raw-export mod id _ _ src-mod src-id _) r)
   (for/or ([spec (in-list ignore)])
     (match spec
       [(list ignore-mod ids ...)
@@ -293,51 +313,104 @@
        (define m (normalize-module-path ignore-mod))
        (or (equal? m mod) (equal? m src-mod))])))
 
+;;================================================
+;; Choosing the module a binding is reported under
+
+;; Returns the exporter nearest to the definition: the first checked module on a re-export path,
+;; walking out from the definition. Ties go to the module that sorts first.
+(define (nearest-exporter exporters source-module)
+  (define exporter-mods (map exporter-module exporters))
+  (define candidates
+    (for/list ([e (in-list exporters)])
+      (define outward
+        (append (list source-module)
+                (reverse (map car (exporter-via e)))
+                (list (exporter-module e))))
+      (for/first ([m (in-list outward)]
+                  [distance (in-naturals)]
+                  #:when (member m exporter-mods))
+        (cons distance m))))
+  (cdr (car (sort candidates
+                  (λ (a b) (or (< (car a) (car b))
+                               (and (= (car a) (car b)) (module<? (cdr a) (cdr b)))))))))
+
+;; A documented binding goes under the first exporter its docs name; any other binding goes under
+;; the exporter nearest its definition.
+(define (report-module exporters source-module doc-modules)
+  (define exporter-mods (map exporter-module exporters))
+  (or (and doc-modules
+           (for/first ([m (in-list doc-modules)] #:when (member m exporter-mods)) m))
+      (nearest-exporter exporters source-module)))
+
+;; Combines one binding's exports (all with the same definition) into a binding.
+(define (raw-exports->binding rs)
+  (match-define (raw-export _ _ kind _ src-mod src-id src-pkg) (car rs))
+  (define exporters
+    (for/list ([r (in-list (remove-duplicates rs #:key raw-export-module))])
+      (exporter (raw-export-module r) (raw-export-id r) (raw-export-via r)
+                (and (definition-tag (raw-export-module r) (raw-export-id r)) #t))))
+  (define doc-modules
+    (for/first ([e (in-list exporters)] #:when (exporter-documented? e))
+      (documented-exporting-modules (exporter-module e) (exporter-id e))))
+  (define mod (report-module exporters src-mod doc-modules))
+  (define id (exporter-id (findf (λ (e) (equal? (exporter-module e) mod)) exporters)))
+  (binding mod id kind src-mod src-id src-pkg exporters doc-modules))
+
+;; checked : hash whose keys are the modules that were checked successfully
+(define (binding-warnings b checked)
+  (cond
+    [(not (binding-documented? b)) '()]
+    [else
+     (define exporter-mods (map exporter-module (binding-exporters b)))
+     (append
+      (for/list ([e (in-list (binding-exporters b))]
+                 #:unless (exporter-documented? e))
+        (unreachable-docs-warning b (exporter-module e)))
+      (for/list ([m (in-list (binding-doc-modules b))]
+                 #:when (hash-ref checked m #f)
+                 #:unless (member m exporter-mods))
+        (export-claim-warning b m)))]))
+
 (define (bindings->coverage bindings)
   (for/list ([group (in-list (sort (group-by binding-module bindings) module<?
                                    #:key (λ (g) (binding-module (car g)))))])
-    (define statuses (map binding-doc-status group))
-    (define (with-status s)
-      (for/list ([b (in-list group)]
-                 [st (in-list statuses)]
-                 #:when (eq? st s))
-        b))
-    (module-coverage (binding-module (car group))
-                     (with-status 'documented)
-                     (with-status 'unreachable)
-                     (with-status 'missing))))
+    (define-values (documented missing) (partition binding-documented? group))
+    (module-coverage (binding-module (car group)) documented missing)))
 
 ;; Checks the bindings exported from mods. A binding defined in one of pkgs counts toward the
 ;; score; one re-exported from another package is reported but not scored; one from Racket's
-;; main collections is skipped. When several modules export the same binding, it is reported
-;; under the first of mods that exports it.
+;; main collections is skipped.
 (define (check-coverage mods #:packages pkgs #:ignore [ignore '()])
-  (define-values (bindings errors)
+  (define-values (raws errors)
     (parameterize ([current-namespace (make-base-empty-namespace)]
                    [current-export-cache (make-hash)])
-      (for/fold ([bindings '()]
+      (for/fold ([raws '()]
                  [errors '()]
-                 #:result (values (reverse bindings) (reverse errors)))
+                 #:result (values (reverse raws) (reverse errors)))
                 ([mod (in-list mods)])
-        (with-handlers ([exn:fail? (λ (e) (values bindings
+        (with-handlers ([exn:fail? (λ (e) (values raws
                                                   (cons (cons mod (exn-message e)) errors)))])
-          (values (append (reverse (module-bindings mod)) bindings) errors)))))
-  (define kept
-    (remove-duplicates
-     (for/list ([b (in-list bindings)]
-                #:when (binding-source-pkg b)
-                #:unless (ignored? b ignore))
-       b)
-     #:key (λ (b) (cons (binding-source-module b) (binding-source-id b)))))
+          (values (append (reverse (module-exports mod)) raws) errors)))))
+  (define checked
+    (for/hash ([mod (in-list mods)] #:unless (assoc mod errors))
+      (values mod #t)))
+  (define bindings
+    (for/list ([rs (in-list (group-by (λ (r) (cons (raw-export-source-module r)
+                                                   (raw-export-source-id r)))
+                                      raws))]
+               #:when (raw-export-source-pkg (car rs))
+               #:unless (for/or ([r (in-list rs)]) (ignored? r ignore)))
+      (raw-exports->binding rs)))
   (define-values (scored unscored)
-    (partition (λ (b) (member (binding-source-pkg b) pkgs)) kept))
+    (partition (λ (b) (member (binding-source-pkg b) pkgs)) bindings))
   (coverage-report (bindings->coverage scored)
                    (bindings->coverage unscored)
+                   (sort (append-map (λ (b) (binding-warnings b checked)) scored)
+                         module<? #:key doc-warning-module)
                    errors))
 
 (define (module-coverage-total mc)
   (+ (length (module-coverage-documented mc))
-     (length (module-coverage-unreachable mc))
      (length (module-coverage-missing mc))))
 
 ;; Returns the number of documented bindings and the total number of bindings.
@@ -363,27 +436,60 @@
   (check-equal? (sort '(b a/c (submod a x) a a-z/b) module<?)
                 '(a a/c (submod a x) a-z/b b))
 
-  (define take-binding (binding 'racket/list 'take 'value 'racket/list 'take #f '()))
-  (check-eq? (binding-doc-status take-binding) 'documented)
-  (check-eq? (binding-doc-status (struct-copy binding take-binding [id 'no-such-thing]
-                                              [source-id 'no-such-thing]))
-             'missing)
+  (define (raw mod id #:source [src mod] #:source-id [src-id id])
+    (raw-export mod id 'value '() src src-id "pkg"))
+  (check-true (ignored? (raw 'racket/list 'take) '(racket/list)))
+  (check-true (ignored? (raw 'racket/list 'take) '((racket/list take drop))))
+  (check-false (ignored? (raw 'racket/list 'take) '((racket/list drop))))
+  (check-true (ignored? (raw 'a 'x #:source 'b #:source-id 'y) '((b y))))
+  (check-false (ignored? (raw 'racket/list 'take) '(racket/base)))
 
-  (check-true (ignored? take-binding '(racket/list)))
-  (check-true (ignored? take-binding '((racket/list take drop))))
-  (check-false (ignored? take-binding '((racket/list drop))))
-  (check-false (ignored? take-binding '(racket/base)))
+  (check-not-false (findf (λ (r) (eq? (raw-export-id r) 'take))
+                          (parameterize ([current-namespace (make-base-empty-namespace)])
+                            (module-exports 'racket/list))))
 
-  (define list-bindings
-    (parameterize ([current-namespace (make-base-empty-namespace)])
-      (module-bindings 'racket/list)))
-  (check-not-false (findf (λ (b) (eq? (binding-id b) 'take)) list-bindings))
+  ;; `first` is defined in racket/private/list-predicates, documented under racket/list
+  (define first-exporters (list (exporter 'racket 'first '((racket/list . first)) #t)
+                                (exporter 'racket/list 'first '() #t)))
+  (check-equal? (documented-exporting-modules 'racket/list 'first) '(racket/list racket))
+  (check-equal? (report-module first-exporters 'racket/private/list-predicates
+                               '(racket/list racket))
+                'racket/list)
+
+  ;; Undocumented: the exporter nearest the definition wins, whatever the sort order.
+  ;; m/private/impl defines foo; m/z re-exports it; m/a re-exports m/z.
+  (define foo-exporters (list (exporter 'm/a 'foo '((m/z . foo)) #f)
+                              (exporter 'm/z 'foo '() #f)))
+  (check-equal? (nearest-exporter foo-exporters 'm/private/impl) 'm/z)
+  (check-equal? (report-module foo-exporters 'm/private/impl #f) 'm/z)
+  ;; A checked definition module is nearest of all
+  (check-equal? (nearest-exporter (cons (exporter 'm/private/impl 'foo '() #f) foo-exporters)
+                                  'm/private/impl)
+                'm/private/impl)
+  ;; Two modules at the same distance: sort order breaks the tie
+  (check-equal? (nearest-exporter (list (exporter 'm/z 'foo '() #f) (exporter 'm/a 'foo '() #f))
+                                  'm/private/impl)
+                'm/a)
+
+  ;; Warnings: m/b can't reach the docs, and the docs claim m/c exports foo
+  (define documented-foo
+    (binding 'm/a 'foo 'value 'm/private/impl 'foo "pkg"
+             (list (exporter 'm/a 'foo '() #t) (exporter 'm/b 'foo '() #f))
+             '(m/a m/c)))
+  (check-equal? (binding-warnings documented-foo (hash 'm/a #t 'm/b #t 'm/c #t))
+                (list (unreachable-docs-warning documented-foo 'm/b)
+                      (export-claim-warning documented-foo 'm/c)))
+  ;; Claims about modules that weren't checked are left alone
+  (check-equal? (binding-warnings documented-foo (hash 'm/a #t 'm/b #t))
+                (list (unreachable-docs-warning documented-foo 'm/b)))
 
   ;; Racket's main collections are skipped
   (check-equal? (check-coverage '(racket/list) #:packages '("base"))
-                (coverage-report '() '() '()))
+                (coverage-report '() '() '() '()))
 
-  (check-equal? (coverage-ratio (list (module-coverage 'a (list take-binding) '() '())
-                                      (module-coverage 'b '() '() (list take-binding))))
+  (define b1 (struct-copy binding documented-foo))
+  (define b2 (struct-copy binding documented-foo [doc-modules #f]))
+  (check-equal? (coverage-ratio (list (module-coverage 'a (list b1) '())
+                                      (module-coverage 'b '() (list b2))))
                 1/2)
   (check-false (coverage-ratio '())))

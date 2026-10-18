@@ -67,6 +67,7 @@
                    #:include-private? include-private?
                    #:ignore extra-ignore
                    #:min-coverage cli-min
+                   #:strict? strict?
                    #:format fmt)
   (define configs (map read-config pkgs))
   (define mods
@@ -79,7 +80,7 @@
   (define report (check-coverage mods #:packages pkgs #:ignore ignore))
   (define ratio (coverage-ratio (coverage-report-scored report)))
 
-  (define warnings
+  (define notices
     (append
      (for/list ([e (in-list (coverage-report-errors report))])
        (format "could not load ~s: ~a" (car e) (cdr e)))
@@ -90,25 +91,30 @@
 
   (case fmt
     [(text) (write-text-report report pkgs)]
-    [(json) (write-json-report report pkgs warnings)]
+    [(json) (write-json-report report pkgs notices)]
     [(stubs) (write-scribble-stubs report)])
   (flush-output)
   (unless (eq? fmt 'json)
-    (for ([w (in-list warnings)])
-      (eprintf "warning: ~a\n" w)))
+    (for ([n (in-list notices)])
+      (eprintf "warning: ~a\n" n)))
 
-  (cond
-    [(and min-coverage ratio (< (* ratio 100) min-coverage))
-     (unless (eq? fmt 'json)
-       (eprintf "Coverage ~a% is below the minimum of ~a%\n"
-                (real->decimal-string (* ratio 100) 1) min-coverage))
-     1]
-    [else 0]))
+  (define below-min? (and min-coverage ratio (< (* ratio 100) min-coverage)))
+  (define warning-count (length (coverage-report-warnings report)))
+  (define fail-on-warnings? (and strict? (positive? warning-count)))
+  (unless (eq? fmt 'json)
+    (when below-min?
+      (eprintf "Coverage ~a% is below the minimum of ~a%\n"
+               (real->decimal-string (* ratio 100) 1) min-coverage))
+    (when fail-on-warnings?
+      (eprintf "~a documentation warning~a (--strict)\n"
+               warning-count (if (= warning-count 1) "" "s"))))
+  (if (or below-min? fail-on-warnings?) 1 0))
 
 (module+ main
   (define include-private? #f)
   (define ignore '())
   (define min-coverage #f)
+  (define strict? #f)
   (define fmt 'text)
   (define pkgs
     (command-line
@@ -118,6 +124,8 @@
                             (set! include-private? #t)]
      [("--min") pct "Exit with status 1 if coverage is below <pct> percent"
                 (set! min-coverage (parse-min pct))]
+     [("--strict") "Exit with status 1 if there are any documentation warnings"
+                   (set! strict? #t)]
      [("-f" "--format") format "Output format: text (default), json or stubs"
                         (set! fmt (parse-format format))]
      #:multi
@@ -129,6 +137,7 @@
                    #:include-private? include-private?
                    #:ignore (reverse ignore)
                    #:min-coverage min-coverage
+                   #:strict? strict?
                    #:format fmt)))
 
 (module+ test

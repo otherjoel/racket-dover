@@ -26,7 +26,6 @@
   (define pkgs
     (sort (remove-duplicates
            (map binding-source-pkg (append (all-of module-coverage-documented)
-                                           (all-of module-coverage-unreachable)
                                            (all-of module-coverage-missing))))
           string<?))
   (for/list ([pkg (in-list pkgs)])
@@ -34,8 +33,45 @@
       (filter (λ (b) (equal? (binding-source-pkg b) pkg)) (all-of sel)))
     (module-coverage pkg
                      (in-pkg module-coverage-documented)
-                     (in-pkg module-coverage-unreachable)
                      (in-pkg module-coverage-missing))))
+
+(define (exporter-modules b)
+  (map exporter-module (binding-exporters b)))
+
+;; The name the binding has in mod, one of its exporters
+(define (id-in b mod)
+  (cond [(findf (λ (e) (equal? (exporter-module e) mod)) (binding-exporters b)) => exporter-id]
+        [else (binding-id b)]))
+
+(define (modules->string mods)
+  (string-join (map module->string mods) ", "))
+
+;;================================================
+;; Warnings
+
+(define (warning-message w)
+  (match-define (doc-warning b mod) w)
+  (match w
+    [(? unreachable-docs-warning?)
+     (format "~a: Scribble can't find the docs for ~a from this module"
+             (module->string mod) (id-in b mod))]
+    [(? export-claim-warning?)
+     (format "~a: the docs say this module exports ~a, but it doesn't"
+             (module->string mod) (binding-id b))]))
+
+(define (warning-fix w)
+  (match-define (doc-warning b mod) w)
+  (define doc-mods (binding-doc-modules b))
+  (match w
+    [(? unreachable-docs-warning?)
+     (format "add ~a to the #:use-sources of the defmodule or declare-exporting~a"
+             (module->string (binding-source-module b))
+             (if (null? doc-mods)
+                 " that documents it"
+                 (format " for ~a" (module->string (car doc-mods)))))]
+    [(? export-claim-warning?)
+     (format "remove ~a from the declare-exporting that documents ~a, or provide ~a from ~a"
+             (module->string mod) (binding-id b) (binding-id b) (module->string mod))]))
 
 ;;================================================
 ;; Terminal output
@@ -94,45 +130,39 @@
   (term-bytes color:reset)
   (newline))
 
-(define (format-binding-source b #:show-exporter? show-exporter?)
+(define (format-binding-details b #:show-exporters? show-exporters?)
   (define renamed? (not (eq? (binding-source-id b) (binding-id b))))
   (define parts
     (append
      (if (or renamed? (not (equal? (binding-source-module b) (binding-module b))))
-         (list (format "from ~a~a"
+         (list (format "defined in ~a~a"
                        (module->string (binding-source-module b))
                        (if renamed? (format " as ~a" (binding-source-id b)) "")))
          '())
-     (if show-exporter?
-         (list (format "exported by ~a" (module->string (binding-module b))))
+     (if (or show-exporters? (not (equal? (exporter-modules b) (list (binding-module b)))))
+         (list (format "exported by ~a" (modules->string (exporter-modules b))))
          '())))
-  (if (null? parts) "" (format "  (~a)" (string-join parts ", "))))
+  (if (null? parts) "" (format "  (~a)" (string-join parts "; "))))
 
 ;; Lists the bindings without documentation. Returns #t if it printed anything.
-(define (write-missing mcs #:show-exporter? show-exporter?)
+(define (write-missing mcs #:show-exporters? show-exporters?)
   (for/fold ([printed? #f]) ([mc (in-list mcs)])
-    (match-define (module-coverage label _ unreachable missing) mc)
-    (define miss-count (+ (length missing) (length unreachable)))
+    (match-define (module-coverage label _ missing) mc)
     (cond
-      [(zero? miss-count) printed?]
+      [(null? missing) printed?]
       [else
        (define total (module-coverage-total mc))
-       (term-bytes (if (<= (/ miss-count total) 3/10) color:yellow color:red))
-       (printf "~a  [missing ~a of ~a]:\n" (module->string label) miss-count total)
+       (term-bytes (if (<= (/ (length missing) total) 3/10) color:yellow color:red))
+       (printf "~a  [missing ~a of ~a]:\n" (module->string label) (length missing) total)
        (term-bytes color:reset)
        (for ([b (in-list missing)])
          (printf "  ~a~a\n" (binding-id b)
-                 (format-binding-source b #:show-exporter? show-exporter?)))
-       (for ([b (in-list unreachable)])
-         (printf "  ~a  (documented in ~a, but not reachable from ~a)\n"
-                 (binding-id b)
-                 (module->string (binding-documented-via b))
-                 (module->string (binding-module b))))
+                 (format-binding-details b #:show-exporters? show-exporters?)))
        #t])))
 
-(define (write-section title mcs #:show-exporter? [show-exporter? #f])
+(define (write-section title mcs #:show-exporters? [show-exporters? #f])
   (write-header title)
-  (when (write-missing mcs #:show-exporter? show-exporter?)
+  (when (write-missing mcs #:show-exporters? show-exporters?)
     (newline))
   (for ([mc (in-list mcs)])
     (write-bar-line (module->string (module-coverage-module mc))
@@ -142,11 +172,21 @@
   (define-values (documented total) (coverage-totals mcs))
   (write-bar-line "Total" documented total))
 
-;; The scored section is grouped by the module that exports each binding; the unscored section by
-;; the package that defines it.
+(define (write-warnings warnings)
+  (write-header (format "Documentation warnings (~a)" (length warnings)))
+  (for ([w (in-list warnings)])
+    (term-bytes color:yellow)
+    (write-string (warning-message w))
+    (term-bytes color:reset)
+    (newline)
+    (printf "  fix: ~a\n" (warning-fix w))))
+
+;; The scored section is grouped by the module each binding is reported under; the unscored
+;; section by the package that defines it.
 (define (write-text-report report pkgs)
   (define scored (coverage-report-scored report))
   (define unscored (by-source-package (coverage-report-unscored report)))
+  (define warnings (coverage-report-warnings report))
   (define all (append scored unscored))
   (section-title-width
    (apply max 5 (for/list ([mc (in-list all)])
@@ -161,7 +201,10 @@
   (unless (null? unscored)
     (newline)
     (write-section "Re-exported from other packages (not scored)" unscored
-                   #:show-exporter? #t)))
+                   #:show-exporters? #t))
+  (unless (null? warnings)
+    (newline)
+    (write-warnings warnings)))
 
 ;;================================================
 ;; JSON
@@ -171,14 +214,16 @@
           'kind (symbol->string (binding-kind b))
           'source_module (module->string (binding-source-module b))
           'source_id (symbol->string (binding-source-id b))
-          'source_pkg (binding-source-pkg b)))
+          'source_pkg (binding-source-pkg b)
+          'exported_by (map module->string (exporter-modules b))
+          'documented_in (let ([mods (binding-doc-modules b)])
+                           (if mods (map module->string mods) (json-null)))))
 
 (define (module-coverage->jsexpr mc key)
-  (match-define (module-coverage label documented unreachable missing) mc)
+  (match-define (module-coverage label documented missing) mc)
   (hasheq key (module->string label)
           'total (module-coverage-total mc)
           'documented (length documented)
-          'unreachable (map binding->jsexpr unreachable)
           'missing (map binding->jsexpr missing)))
 
 (define (coverage->jsexpr mcs group-key key)
@@ -189,15 +234,25 @@
           'coverage (if ratio (exact->inexact ratio) (json-null))
           group-key (for/list ([mc (in-list mcs)]) (module-coverage->jsexpr mc key))))
 
-(define (write-json-report report pkgs warnings)
-  (match-define (coverage-report scored unscored errors) report)
+(define (warning->jsexpr w)
+  (match-define (doc-warning b mod) w)
+  (hasheq 'type (if (unreachable-docs-warning? w) "unreachable_docs" "export_claim")
+          'module (module->string mod)
+          'binding (binding->jsexpr b)
+          'message (warning-message w)
+          'fix (warning-fix w)))
+
+;; notices : (listof string), problems with the check itself (such as docs not being built)
+(define (write-json-report report pkgs notices)
+  (match-define (coverage-report scored unscored warnings errors) report)
   (write-json
    (hasheq 'packages pkgs
            'scored (coverage->jsexpr scored 'modules 'module)
            'unscored (coverage->jsexpr (by-source-package unscored) 'packages 'package)
+           'warnings (map warning->jsexpr warnings)
            'errors (for/list ([e (in-list errors)])
                      (hasheq 'module (module->string (car e)) 'message (cdr e)))
-           'warnings warnings))
+           'notices notices))
   (newline))
 
 ;;================================================
