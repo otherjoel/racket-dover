@@ -35,12 +35,13 @@
 ;;================================================
 ;; Data
 
-;; A checked module that exports a binding.
+;; A checked module's export of a binding. A module that exports a binding under more than one name
+;; has an exporter for each name.
 ;; module      : the module
 ;; id          : the name it exports the binding under
 ;; via         : (listof (cons module-path symbol)), the modules and names the binding passes
 ;;               through between module and the definition
-;; documented? : whether Scribble can find the binding's docs from module
+;; documented? : whether the binding, as exported by module under id, connects to its docs
 (struct exporter (module id via documented?) #:transparent)
 
 ;; A binding, identified by where it is defined.
@@ -58,8 +59,12 @@
 ;; Documentation hygiene problems for a documented binding
 (struct doc-warning (binding module) #:transparent)
 ;; The binding is documented, but as exported by module, which exports it, it doesn't connect to
-;; its docs
-(struct unreachable-docs-warning doc-warning () #:transparent)
+;; its docs.
+;; id         : the name module exports the binding under
+;; doc-id     : the name the docs use for it
+;; use-source : a module on the binding's re-export path from module that exports it as doc-id,
+;;              so that adding it to #:use-sources connects this export; or #f if there's none
+(struct unreachable-docs-warning doc-warning (id doc-id use-source) #:transparent)
 ;; The docs say module exports the binding, but it doesn't
 (struct export-claim-warning doc-warning () #:transparent)
 
@@ -375,23 +380,49 @@
                     (λ (x y) (or (> (hash-ref counts x) (hash-ref counts y))
                                  (and (= (hash-ref counts x) (hash-ref counts y))
                                       (module<? x y)))))))
-       (define id (exporter-id (findf (λ (e) (equal? (exporter-module e) mod))
-                                      (binding-exporters b))))
-       (struct-copy binding b [module mod] [id id])])))
+       (struct-copy binding b
+                    [module mod]
+                    [id (id-in-module (binding-exporters b) mod (binding-source-id b))])])))
 
-;; Combines one binding's exports (all with the same definition) into a binding.
+;; The name that mod exports the binding under, when it has more than one: one that connects to the
+;; docs, else the name it's defined under, else the first.
+(define (id-in-module exporters mod source-id)
+  (define es (filter (λ (e) (equal? (exporter-module e) mod)) exporters))
+  (exporter-id (or (findf exporter-documented? es)
+                   (findf (λ (e) (eq? (exporter-id e) source-id)) es)
+                   (car es))))
+
+;; Combines one binding's exports (all with the same definition) into a binding. Each name a
+;; module exports it under is checked, since each can connect to the docs or not.
 (define (raw-exports->binding rs)
   (match-define (raw-export _ _ kind _ src-mod src-id src-pkg) (car rs))
   (define exporters
-    (for/list ([r (in-list (remove-duplicates rs #:key raw-export-module))])
+    (for/list ([r (in-list (remove-duplicates rs #:key (λ (r) (cons (raw-export-module r)
+                                                                    (raw-export-id r)))))])
       (exporter (raw-export-module r) (raw-export-id r) (raw-export-via r)
                 (and (definition-tag (raw-export-module r) (raw-export-id r)) #t))))
   (define doc-modules
     (for/first ([e (in-list exporters)] #:when (exporter-documented? e))
       (documented-exporting-modules (exporter-module e) (exporter-id e))))
   (define mod (report-module exporters src-mod doc-modules))
-  (define id (exporter-id (findf (λ (e) (equal? (exporter-module e) mod)) exporters)))
-  (binding mod id kind src-mod src-id src-pkg exporters doc-modules))
+  (binding mod (id-in-module exporters mod src-id) kind src-mod src-id src-pkg exporters
+           doc-modules))
+
+;; The name the docs use for a documented binding: the name in the definition tag that one of its
+;; connecting exports finds, else that export's name.
+(define (documented-id b)
+  (define e (findf exporter-documented? (binding-exporters b)))
+  (match (definition-tag (exporter-module e) (exporter-id e))
+    [(list _ (list _ (? symbol? name))) name]
+    [_ (exporter-id e)]))
+
+;; A module on e's re-export path, working outward from the definition, that exports the binding
+;; as doc-id; or #f if there's none.
+(define (use-source-for b e doc-id)
+  (for/first ([hop (in-list (cons (cons (binding-source-module b) (binding-source-id b))
+                                  (reverse (exporter-via e))))]
+              #:when (eq? (cdr hop) doc-id))
+    (car hop)))
 
 ;; checked : hash whose keys are the modules that were checked successfully
 (define (binding-warnings b checked)
@@ -399,10 +430,12 @@
     [(not (binding-documented? b)) '()]
     [else
      (define exporter-mods (map exporter-module (binding-exporters b)))
+     (define doc-id (documented-id b))
      (append
       (for/list ([e (in-list (binding-exporters b))]
                  #:unless (exporter-documented? e))
-        (unreachable-docs-warning b (exporter-module e)))
+        (unreachable-docs-warning b (exporter-module e) (exporter-id e) doc-id
+                                  (use-source-for b e doc-id)))
       (for/list ([m (in-list (binding-doc-modules b))]
                  #:when (hash-ref checked m #f)
                  #:unless (member m exporter-mods))
@@ -539,11 +572,36 @@
              (list (exporter 'm/a 'foo '() #t) (exporter 'm/b 'foo '() #f))
              '(m/a m/c)))
   (check-equal? (binding-warnings documented-foo (hash 'm/a #t 'm/b #t 'm/c #t))
-                (list (unreachable-docs-warning documented-foo 'm/b)
+                (list (unreachable-docs-warning documented-foo 'm/b 'foo 'foo 'm/private/impl)
                       (export-claim-warning documented-foo 'm/c)))
   ;; Claims about modules that weren't checked are left alone
   (check-equal? (binding-warnings documented-foo (hash 'm/a #t 'm/b #t))
-                (list (unreachable-docs-warning documented-foo 'm/b)))
+                (list (unreachable-docs-warning documented-foo 'm/b 'foo 'foo 'm/private/impl)))
+
+  ;; Renames. m/private/impl defines %frob; the docs document it as frob, through m/a.
+  (define (frob-warnings . exporters)
+    (define b (binding 'm/a 'frob 'value 'm/private/impl '%frob "pkg"
+                       (cons (exporter 'm/a 'frob '() #t) exporters) '(m/a)))
+    (map (λ (w) (list (doc-warning-module w) (unreachable-docs-warning-id w)
+                      (unreachable-docs-warning-use-source w)))
+         (binding-warnings b (hash))))
+  ;; m/b renames it itself, so nothing on its path exports it as frob
+  (check-equal? (frob-warnings (exporter 'm/b 'frob '() #f)) '((m/b frob #f)))
+  ;; m/c gets it from m/private/api, which renames it once; that's the module for #:use-sources
+  (check-equal? (frob-warnings (exporter 'm/c 'frob '((m/private/api . frob)) #f))
+                '((m/c frob m/private/api)))
+  ;; m/d exports it under another name, and so does m/a, as an alias: each name is checked
+  (check-equal? (frob-warnings (exporter 'm/d 'colour '() #f) (exporter 'm/a 'twiddle '() #f))
+                '((m/d colour #f) (m/a twiddle #f)))
+
+  ;; A module that exports a binding under more than one name reports it under the name that
+  ;; connects to the docs, else the name it's defined under
+  (check-equal? (id-in-module (list (exporter 'm/a 'build '() #f) (exporter 'm/a 'make '() #t))
+                              'm/a 'make)
+                'make)
+  (check-equal? (id-in-module (list (exporter 'm/a 'build '() #f) (exporter 'm/a 'make '() #f))
+                              'm/a 'make)
+                'make)
 
   ;; Racket's main collections are skipped
   (check-equal? (check-coverage '(racket/list) #:packages '("base"))

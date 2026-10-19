@@ -193,6 +193,13 @@ docs as exported by any module that re-exports it:
 @diagram["private-after.svg"]{The docs are keyed to mypkg/private/widget, where make-widget
 is defined, so make-widget connects to them as exported by both mypkg and mypkg/lite.}
 
+This works because the private module exports the binding under the same name the docs use.
+Scribble matches the modules in @racket[#:use-sources] by name, so if
+@racketmodfont{mypkg/private/widget} defined @racketidfont{%make-widget}, and each public module
+renamed it with @racket[rename-out], no @racket[#:use-sources] could connect it. In that case, give
+the binding its public name in one private module, have the public modules re-export it from
+there, and add that module to @racket[#:use-sources].
+
 The @racket[#:use-sources] option fixes the connection; it doesn’t change which modules your docs say
 the binding is provided from. To list @racketmodfont{mypkg/lite} there too, combine it with the
 approach from @secref["recipe-reexports"]:

@@ -22,10 +22,14 @@ jobs:
           variant: ${{ matrix.racket-variant }}
           version: ${{ matrix.racket-version }}
       - name: Installing dover and its dependencies
-        run: raco pkg install --no-docs --auto --link dover-lib dover
+        run: raco pkg install --no-docs --auto --link dover-lib dover dover-test
       - name: Compiling dover and building its docs
         run: raco setup --check-pkg-deps --unused-pkg-deps --pkgs dover-lib dover
+      # dover-test's tests run `raco dover` and build fixture docs in subprocesses, so its
+      # dependencies look unused to --unused-pkg-deps
+      - name: Compiling dover's tests
+        run: raco setup --check-pkg-deps --pkgs dover-test
       - name: Testing dover
-        run: raco test -x -p dover-lib dover
+        run: raco test -x -p dover-lib dover dover-test
       - name: Checking dover's own documentation coverage
         run: raco dover check --strict --min 100 dover-lib

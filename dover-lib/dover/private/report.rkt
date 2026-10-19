@@ -36,13 +36,10 @@
                      (in-pkg module-coverage-documented)
                      (in-pkg module-coverage-missing))))
 
+;; A module that exports a binding under more than one name has an exporter for each, so remove
+;; duplicates
 (define (exporter-modules b)
-  (map exporter-module (binding-exporters b)))
-
-;; The name the binding has in mod, one of its exporters
-(define (id-in b mod)
-  (cond [(findf (λ (e) (equal? (exporter-module e) mod)) (binding-exporters b)) => exporter-id]
-        [else (binding-id b)]))
+  (remove-duplicates (map exporter-module (binding-exporters b))))
 
 (define (modules->string mods)
   (string-join (map module->string mods) ", "))
@@ -53,9 +50,9 @@
 (define (warning-message w)
   (match-define (doc-warning b mod) w)
   (match w
-    [(? unreachable-docs-warning?)
-     (format "~a: ~a is documented, but as exported by this module it doesn't connect to its docs"
-             (module->string mod) (id-in b mod))]
+    [(unreachable-docs-warning _ _ id doc-id _)
+     (format "~a: ~a is documented~a, but as exported by this module it doesn't connect to its docs"
+             (module->string mod) id (if (eq? id doc-id) "" (format " (as ~a)" doc-id)))]
     [(? export-claim-warning?)
      (format "~a: the docs say this module exports ~a, but it doesn't"
              (module->string mod) (binding-id b))]))
@@ -66,20 +63,33 @@
 (define current-internal-module-fix
   (make-parameter (λ (_mod) "list it in dover-consider-private")))
 
-;; The parts of an unreachable-docs fix that depend on the binding: the module that defines it,
-;; and the first module its docs say export it (or #f). Bindings with the same key share a fix.
-(define (use-sources-key b)
+;; The fix for an unreachable-docs warning, not counting the internal-module alternative. one? says
+;; whether it is for one binding or several; warnings with the same fix are listed together.
+;;  - If a module on the binding's re-export path exports it under the name the docs use, adding
+;;    that module to #:use-sources connects it.
+;;  - If the module exports it under that name but gives it the name itself, no #:use-sources can:
+;;    Scribble matches #:use-sources modules by name.
+;;  - If the module exports it under another name, that name needs its own docs.
+(define (unreachable-fix w one?)
+  (match-define (unreachable-docs-warning b _ id doc-id use-source) w)
+  (define it (if one? "it" "them"))
   (define doc-mods (binding-doc-modules b))
-  (cons (binding-source-module b) (if (null? doc-mods) #f (car doc-mods))))
-
-;; it : what to call the binding(s) when the docs have no module, such as "it" or "them"
-(define (use-sources-fix key it)
-  (match-define (cons source-mod doc-mod) key)
-  (format "add ~a to the #:use-sources of the defmodule or declare-exporting ~a"
-          (module->string source-mod)
-          (if doc-mod
-              (format "for ~a" (module->string doc-mod))
-              (format "that documents ~a" it))))
+  (define doc-mod (and (pair? doc-mods) (module->string (car doc-mods))))
+  (cond
+    [use-source
+     (format "add ~a to the #:use-sources of the defmodule or declare-exporting ~a"
+             (module->string use-source)
+             (if doc-mod (format "for ~a" doc-mod) (format "that documents ~a" it)))]
+    [(eq? id doc-id)
+     (format (string-append "this module renames ~a itself, so no #:use-sources can connect ~a; "
+                            "rename ~a in one module that every public module re-exports ~a from, "
+                            "and add that module to the #:use-sources~a")
+             it it it it
+             (if doc-mod (format ", or have this module re-export ~a from ~a" it doc-mod) ""))]
+    [else
+     (format (string-append "the docs cover ~a only under another name; document ~a under ~a "
+                            "name~a too (for example, with deftogether)")
+             it it (if one? "this" "these") (if one? "" "s"))]))
 
 ;; Returns #f if there is nothing to suggest
 (define (internal-module-fix mod)
@@ -96,7 +106,7 @@
   (match w
     [(? unreachable-docs-warning?)
      (define internal-fix (internal-module-fix mod))
-     (string-append (use-sources-fix (use-sources-key b) "it")
+     (string-append (unreachable-fix w #t)
                     (if internal-fix (string-append "; or, " internal-fix) ""))]
     [(? export-claim-warning?)
      (export-claim-fix mod (binding-id b) (binding-id b))]))
@@ -231,12 +241,13 @@
             (if one? "This binding is" "These bindings are")
             (if one? "it doesn't" "they don't")
             (if one? "its" "their"))
-    ;; Bindings that need different #:use-sources are listed separately, each with its fix
-    (for ([g (in-list (group-by-key ws (λ (w) (use-sources-key (doc-warning-binding w)))))])
-      (match-define (cons key g-ws) g)
+    ;; Bindings that need different fixes are listed separately, each with its fix
+    (for ([g (in-list (group-by-key ws (λ (w) (unreachable-fix w #t))))])
+      (define g-ws (cdr g))
       (for ([w (in-list g-ws)])
-        (printf "    ~a\n" (id-in (doc-warning-binding w) mod)))
-      (printf "  fix: ~a\n" (use-sources-fix key (if (null? (cdr g-ws)) "it" "them"))))
+        (match-define (unreachable-docs-warning _ _ id doc-id _) w)
+        (printf "    ~a~a\n" id (if (eq? id doc-id) "" (format "  (documented as ~a)" doc-id))))
+      (printf "  fix: ~a\n" (unreachable-fix (car g-ws) (null? (cdr g-ws)))))
     (define internal-fix (internal-module-fix mod))
     (when internal-fix
       (printf "   or: ~a\n" internal-fix))))
@@ -307,11 +318,19 @@
 
 (define (warning->jsexpr w)
   (match-define (doc-warning b mod) w)
-  (hasheq 'type (if (unreachable-docs-warning? w) "unreachable_docs" "export_claim")
-          'module (module->string mod)
-          'binding (binding->jsexpr b)
-          'message (warning-message w)
-          'fix (warning-fix w)))
+  (define base
+    (hasheq 'type (if (unreachable-docs-warning? w) "unreachable_docs" "export_claim")
+            'module (module->string mod)
+            'binding (binding->jsexpr b)
+            'message (warning-message w)
+            'fix (warning-fix w)))
+  (match w
+    [(unreachable-docs-warning _ _ id doc-id use-source)
+     (hash-set* base
+                'id (symbol->string id)
+                'documented_as (symbol->string doc-id)
+                'use_source (if use-source (module->string use-source) (json-null)))]
+    [_ base]))
 
 ;; notices : (listof string), problems with the check itself (such as docs not being built)
 (define (write-json-report report pkgs notices)

@@ -230,10 +230,25 @@ suggested fix. Warnings do not affect the coverage score.
 
        To fix it, add the defining module to the @racket[#:use-sources] of the
        @racket[defmodule] or @racket[declare-exporting], which keys the docs to the definition
-       so that every re-export connects to them. See @secref["recipe-private"]. (Adding @racketmodfont{mypkg/b} to
-       @racket[declare-exporting] does not help.) If @racketmodfont{mypkg/b} is an internal
-       module that users should not require, list it in @racketidfont{dover-consider-private}
-       instead.}
+       so that every re-export connects to them. See @secref["recipe-private"]. (Adding
+       @racketmodfont{mypkg/b} to @racket[declare-exporting] does not help.) If
+       @racketmodfont{mypkg/b} is an internal module that users should not require, list it in
+       @racketidfont{dover-consider-private} instead.
+
+       Scribble matches @racket[#:use-sources] modules by name, so when a binding is renamed on
+       its way to a public module, Dover suggests the module on that path that exports it under
+       the name the docs use. Two kinds of rename can’t be fixed that way:
+
+       @itemlist[
+        @item{If each public module gives the binding its public name itself, as with
+              @racket[(provide (rename-out [%make-widget make-widget]))] in both
+              @racketmodfont{mypkg/a} and @racketmodfont{mypkg/b}, no module on
+              @racketmodfont{mypkg/b}’s path exports it as @racketidfont{make-widget}. Give it
+              that name in one module that both re-export it from, and add that module to the
+              @racket[#:use-sources]; or have @racketmodfont{mypkg/b} re-export it from
+              @racketmodfont{mypkg/a}.}
+        @item{If @racketmodfont{mypkg/b} exports the binding under a different name than the
+              docs use, that name needs its own docs, for example with @racket[deftogether].}]}
 
  @item{@bold{Incorrect export claim.} The docs say a checked module exports a binding (through
        @racket[defmodule] or @racket[declare-exporting]), but the module doesn't. Either remove
@@ -331,10 +346,11 @@ the modules that the documentation says export the binding.}
                       [id symbol?]
                       [via (listof (cons/c module-path? symbol?))]
                       [documented? boolean?])]{
-A checked module that exports a binding, under the name @racket[id]. The @racket[via] field lists
-the modules, and the binding's names in them, that the binding passes through between
-@racket[module] and the module that defines it. The @racket[documented?] field says whether
-Scribble can find the binding's documentation from @racket[module].}
+A checked module’s export of a binding, under the name @racket[id]. A module that exports a binding
+under more than one name has an @racket[exporter] for each name. The @racket[via] field lists the
+modules, and the binding's names in them, that the binding passes through between @racket[module]
+and the module that defines it. The @racket[documented?] field says whether the binding, as
+exported by @racket[module] under @racket[id], connects to its documentation.}
 
 @defproc[(binding-documented? [b binding?]) boolean?]{
 Returns @racket[#t] if @racket[b] is @tech{documented}.}
@@ -348,9 +364,14 @@ The bindings reported under @racket[module], divided into @tech{documented} and 
 A @seclink["warnings"]{documentation warning} about @racket[binding] and @racket[module]. Only its
 subtypes are instantiated.}
 
-@defstruct*[(unreachable-docs-warning doc-warning) ()]{
-The warning's binding is documented, but as exported by the warning's module, it doesn't connect to
-its documentation.}
+@defstruct*[(unreachable-docs-warning doc-warning) ([id symbol?]
+                                                    [doc-id symbol?]
+                                                    [use-source (or/c module-path? #f)])]{
+The warning's binding is documented, but as exported by the warning's module under the name
+@racket[id], it doesn't connect to its documentation. The @racket[doc-id] field is the name the
+documentation uses for the binding. The @racket[use-source] field is a module on the binding’s
+re-export path that exports it as @racket[doc-id], so that adding it to @racket[#:use-sources]
+would connect this export to the documentation, or @racket[#f] if there is no such module.}
 
 @defstruct*[(export-claim-warning doc-warning) ()]{
 The documentation says the warning's module exports its binding, but the module doesn't.}
