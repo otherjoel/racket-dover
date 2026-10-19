@@ -126,6 +126,9 @@ Valid flags for @nonterm{options}:
        @nonterm{percent}. Overrides @racketidfont{dover-min-coverage}.}
  @item{@DFlag{strict} --- exit with status 1 if there are any
        @seclink["warnings"]{documentation warnings}.}
+ @item{@DFlag{show-reexported} --- also list the bindings re-exported from other packages,
+       which don't affect the score (see @secref["bindings"]). The JSON output always includes
+       them.}
  @item{@Flag{f} @nonterm{format} or @DFlag{format} @nonterm{format} --- where @nonterm{format} is
  one of:
 
@@ -180,8 +183,9 @@ scores it according to which package that module belongs to:
 @itemlist[
  @item{A binding defined in one of the packages being checked counts toward the score. This
        includes bindings defined in private modules and re-exported by public ones.}
- @item{A binding re-exported from another package is listed separately, grouped by the package
-       that defines it, and does not affect the score.}
+ @item{A binding re-exported from another package does not affect the score. The text report
+       lists these bindings, grouped by the package that defines them, only if you give
+       @DFlag{show-reexported}.}
  @item{A binding re-exported from Racket's main collections (such as @racketmodname[racket/list])
        is skipped.}
 ]

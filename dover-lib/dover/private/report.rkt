@@ -265,9 +265,10 @@
 
 ;; The scored section is grouped by the module each binding is reported under; the unscored
 ;; section by the package that defines it.
-(define (write-text-report report pkgs)
+(define (write-text-report report pkgs #:show-reexported? [show-reexported? #f])
   (define scored (coverage-report-scored report))
-  (define unscored (by-source-package (coverage-report-unscored report)))
+  (define unscored
+    (if show-reexported? (by-source-package (coverage-report-unscored report)) '()))
   (define warnings (coverage-report-warnings report))
   (define all (append scored unscored))
   (section-title-width

@@ -103,7 +103,8 @@
                    #:ignore extra-ignore
                    #:min-coverage cli-min
                    #:strict? strict?
-                   #:format fmt)
+                   #:format fmt
+                   #:show-reexported? [show-reexported? #f])
   (define configs (map read-config pkgs))
   (define mods
     (sort (remove-duplicates
@@ -135,7 +136,7 @@
 
   (parameterize ([current-internal-module-fix internal-module-fix])
     (case fmt
-      [(text) (write-text-report report pkgs)]
+      [(text) (write-text-report report pkgs #:show-reexported? show-reexported?)]
       [(json) (write-json-report report pkgs notices)]
       [(stubs) (write-scribble-stubs report)]))
   (flush-output)
@@ -161,6 +162,7 @@
   (define min-coverage #f)
   (define strict? #f)
   (define fmt 'text)
+  (define show-reexported? #f)
   (define pkgs
     (command-line
      #:program "raco dover check"
@@ -173,6 +175,8 @@
                    (set! strict? #t)]
      [("-f" "--format") format "Output format: text (default), json or stubs"
                         (set! fmt (parse-format format))]
+     [("--show-reexported") "Also list bindings re-exported from other packages (not scored)"
+                            (set! show-reexported? #t)]
      #:multi
      [("--ignore") spec "Ignore bindings from <module>, or one binding with <module>:<id>"
                    (set! ignore (cons (parse-ignore spec) ignore))]
@@ -183,7 +187,8 @@
                    #:ignore (reverse ignore)
                    #:min-coverage min-coverage
                    #:strict? strict?
-                   #:format fmt)))
+                   #:format fmt
+                   #:show-reexported? show-reexported?)))
 
 (module+ test
   (require rackunit)
