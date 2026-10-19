@@ -21,6 +21,8 @@ coverage from slipping.
 Dover reads the documentation that is already installed, so a package's docs must be built (normally
 by @exec{raco pkg install} or @exec{raco setup}) before Dover can see them.
 
+The canonical copy of this documentation is at @url{https://joeldueck.com/what-about/dover}.
+
 @table-of-contents[]
 
 @section[#:tag "tour"]{Quick tour}
@@ -95,11 +97,45 @@ After rebuilding the docs, the check comes back clean:
 
 @section{Checking a package}
 
-@commandline{raco dover check @nonterm{pkg} ...}
+@commandline{raco dover check @nonterm{options} @nonterm{pkg} ...}
 
 For each installed @nonterm{pkg}, Dover finds the package's modules, collects the bindings they
 export at phase 0, and looks each binding up in the installed documentation. It prints the bindings
 that are missing documentation, grouped by module, followed by a coverage summary.
+
+Valid flags for @nonterm{options}:
+
+@itemlist[
+ @item{@DFlag{include-private} --- also check modules in @filepath{private} directories and
+       modules listed in @racketidfont{dover-consider-private}.}
+ @item{@DFlag{ignore} @nonterm{module} or @DFlag{ignore} @nonterm{module}@litchar{:}@nonterm{id}
+       --- ignore every binding from @nonterm{module}, or just the binding @nonterm{id}. The
+       @nonterm{module} can be any module that exports the binding or the one that defines it.
+       This flag can be given more than once.}
+ @item{@DFlag{min} @nonterm{percent} --- exit with status 1 if coverage is below
+       @nonterm{percent}. Overrides @racketidfont{dover-min-coverage}.}
+ @item{@DFlag{strict} --- exit with status 1 if there are any
+       @seclink["warnings"]{documentation warnings}.}
+ @item{@Flag{f} @nonterm{format} or @DFlag{format} @nonterm{format} --- where @nonterm{format} is
+ one of:
+
+       @itemlist[
+        @item{@exec{text} (the default) --- a human-readable report, in color when the output
+              is a terminal. Set the @envvar{NO_COLOR} environment variable to turn color off,
+              or @envvar{FORCE_COLOR} to turn it on for output that is not a terminal;}
+        @item{@exec{json} --- a JSON object with totals per module (for scored bindings) or per
+              package (for unscored ones), the missing bindings with the modules that export
+              them, and the documentation warnings with their suggested fixes;}
+        @item{@exec{stubs} --- a @racket[defproc] or @racket[defform] stub for each missing
+              binding, ready to paste into a Scribble file and fill in. The stubs are grouped by
+              the module they are reported under: under a new @racket[defmodule] if that module
+              has no docs yet, or after a comment suggesting the existing @racket[defmodule]
+              or @racket[declare-exporting] to add them under. Since a module's docs can span
+              several sections, Dover also suggests adding each stub near the docs for other
+              bindings defined in the same module, naming up to three of them. Stubs that get
+              the same suggestion are listed together; when a module's stubs get different
+              suggestions, each group comes after a separator line.}]}
+]
 
 @subsection[#:tag "modules"]{Which modules are checked}
 
@@ -205,36 +241,6 @@ suggested fix. Warnings do not affect the coverage score.
 ]
 
 @subsection{Command-line flags}
-
-@itemlist[
- @item{@DFlag{include-private} --- also check modules in @filepath{private} directories and
-       modules listed in @racketidfont{dover-consider-private}.}
- @item{@DFlag{ignore} @nonterm{module} or @DFlag{ignore} @nonterm{module}@litchar{:}@nonterm{id}
-       --- ignore every binding from @nonterm{module}, or just the binding @nonterm{id}. The
-       @nonterm{module} can be any module that exports the binding or the one that defines it.
-       This flag can be given more than once.}
- @item{@DFlag{min} @nonterm{percent} --- exit with status 1 if coverage is below
-       @nonterm{percent}. Overrides @racketidfont{dover-min-coverage}.}
- @item{@DFlag{strict} --- exit with status 1 if there are any
-       @seclink["warnings"]{documentation warnings}.}
- @item{@Flag{f} @nonterm{format} or @DFlag{format} @nonterm{format} --- choose the output:
-       @itemlist[
-        @item{@exec{text} (the default) --- a human-readable report, in color when the output
-              is a terminal. Set the @envvar{NO_COLOR} environment variable to turn color off,
-              or @envvar{FORCE_COLOR} to turn it on for output that is not a terminal;}
-        @item{@exec{json} --- a JSON object with totals per module (for scored bindings) or per
-              package (for unscored ones), the missing bindings with the modules that export
-              them, and the documentation warnings with their suggested fixes;}
-        @item{@exec{stubs} --- a @racket[defproc] or @racket[defform] stub for each missing
-              binding, ready to paste into a Scribble file and fill in. The stubs are grouped by
-              the module they are reported under: under a new @racket[defmodule] if that module
-              has no docs yet, or after a comment suggesting the existing @racket[defmodule]
-              or @racket[declare-exporting] to add them under. Since a module's docs can span
-              several sections, Dover also suggests adding each stub near the docs for other
-              bindings defined in the same module, naming up to three of them. Stubs that get
-              the same suggestion are listed together; when a module's stubs get different
-              suggestions, each group comes after a separator line.}]}
-]
 
 @subsection{Configuration in @filepath{info.rkt}}
 

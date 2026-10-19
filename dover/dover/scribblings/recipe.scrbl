@@ -89,7 +89,7 @@ the sample call comes the contract for the result. Scribble typesets the contrac
 doesn’t check them, so it’s up to you to keep them accurate.
 
 The text in braces describes the function. When it refers to an argument, use @racket[racket], as
-in @litchar|{@racket[name]}|, and Scribble will typeset it as an argument.
+in @code|{@racket[name]}|, and Scribble will typeset it as an argument.
 
 For structs, constants and parameters, use @racket[defstruct*], @racket[defthing] and
 @racket[defparam], which work the same way. All of these are covered in
