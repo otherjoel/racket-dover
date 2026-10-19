@@ -75,8 +75,10 @@ flag and specifying @tt{stubs} as the output format:
 
 The stubs are grouped by the module that each binding is reported under. Since @racketmodfont{tally}
 already has docs, Dover doesn't start a new @racket[defmodule] for it, but suggests adding the stubs
-under the existing @racket[defmodule]. The stub for @racketidfont{counter-value} also suggests adding
-it near the docs for the bindings defined alongside it.
+under the existing @racket[defmodule]. It also suggests adding each stub near the docs for the
+bindings defined in the same module: @racketidfont{counter-value} near the other counter functions,
+and @racketidfont{with-counter} near @racketidfont{tally}. Since these differ, each gets its own
+group, after a dashed line.
 
 Now we’ll fix the docs by adding in the missing stubs and filling them in, and by adding the
 @racket[#:use-sources] that the warnings suggest:
@@ -216,9 +218,12 @@ suggested fix. Warnings do not affect the coverage score.
         @item{@exec{stubs} --- a @racket[defproc] or @racket[defform] stub for each missing
               binding, ready to paste into a Scribble file and fill in. The stubs are grouped by
               the module they are reported under: under a new @racket[defmodule] if that module
-              has no docs yet, or after a comment saying to add them to its existing docs. A stub
-              for a binding defined in another module names the documented bindings from that
-              module, which it belongs next to.}]}
+              has no docs yet, or after a comment suggesting the existing @racket[defmodule]
+              or @racket[declare-exporting] to add them under. Since a module's docs can span
+              several sections, Dover also suggests adding each stub near the docs for other
+              bindings defined in the same module, naming up to three of them. Stubs that get
+              the same suggestion are listed together; when a module's stubs get different
+              suggestions, each group comes after a dashed line.}]}
 ]
 
 @subsection{Configuration in @filepath{info.rkt}}
@@ -278,6 +283,8 @@ After installing your package and building its docs, run:
 
 For a package split into @filepath{-lib} and @filepath{-doc} packages, check the package that
 contains the modules, since that is where the bindings are defined.
+
+@include-section["recipe.scrbl"]
 
 @section{Library}
 

@@ -118,6 +118,7 @@
 
 ;; From https://github.com/lexi-lambda/racket-commonmark/blob/master/commonmark-test/tests/commonmark/spec.rkt
 (define color:bold #"\e[1m")
+(define color:italic #"\e[3m")
 (define color:red #"\e[31m")
 (define color:green #"\e[32m")
 (define color:yellow #"\e[33m")
@@ -327,9 +328,9 @@
 ;;================================================
 ;; Scribble stubs
 
-;; Comments are gray and the def forms bold, when the output is a terminal
+;; Comments are gray and italic, and the def forms bold, when the output is a terminal
 (define (write-stub-comment str)
-  (term-bytes color:gray)
+  (term-bytes color:gray color:italic)
   (write-string (~a "@; " str))
   (term-bytes color:reset)
   (newline))
@@ -343,8 +344,11 @@
     [(value) (write-string (~a "@defproc[(" id " [arg any/c]) any/c]{"))]
     [(syntax) (write-string (~a "@defform[(" id " arg)\n"
                                 "         #:contracts ([arg any/c])]{"))])
+  ;; A sentence to finish, as a placeholder
+  (write-string (~a "\n\n" (if (eq? (binding-kind b) 'value) "Returns a value that" "Expands to code that")
+                    " ...}"))
   (term-bytes color:reset)
-  (write-string (~a "\n\n" id (if (eq? (binding-kind b) 'value) " proc" " form") "}\n\n")))
+  (write-string "\n\n"))
 
 ;; A stub names at most this many of its siblings
 (define max-sibling-names 3)
@@ -359,8 +363,13 @@
 
 ;; Prints Scribble stubs for the scored bindings that have no documentation, grouped by the
 ;; module they are reported under. A module that has no docs yet gets a defmodule; for one that
-;; does, a comment says to add the stubs to its docs. A stub for a binding defined in another
-;; module names the documented bindings from that module, which it belongs next to.
+;; does, a comment suggests adding the stubs under its defmodule or declare-exporting. Since a
+;; module's docs can span several sections, each stub is also placed near some of its siblings
+;; (the documented bindings defined in the same module).
+;;
+;; Stubs with the same siblings get the same advice, so they are listed together. When all of a
+;; module's stubs have the same siblings, all the advice goes at the top; otherwise each group of
+;; stubs gets its own advice, after a dashed line.
 (define (write-scribble-stubs report)
   (define scored (coverage-report-scored report))
   (define documented-modules
@@ -369,33 +378,52 @@
                  [b (in-list (module-coverage-documented mc))]
                  [m (in-list (binding-doc-modules b))])
        m)))
-  (for ([mc (in-list (filter (λ (mc) (pair? (module-coverage-missing mc))) scored))]
-        [i (in-naturals)])
+  (define (these bs) (if (null? (cdr bs)) "this" "these"))
+  (define (near-advice siblings)
+    (~a "near the existing docs for " (names-up-to siblings max-sibling-names)))
+  (for ([mc (in-list scored)] #:unless (null? (module-coverage-missing mc)))
     (match-define (module-coverage mod documented missing) mc)
-    (unless (zero? i)
-      (write-stub-comment "================================================")
+    (define (siblings b)
+      (for/list ([d (in-list documented)]
+                 #:when (equal? (binding-source-module d) (binding-source-module b)))
+        (binding-id d)))
+    (define groups (group-by-key missing siblings))
+    (define module-advice
+      (cond
+        [(module-has-defmodule? mod)
+         (~a "under the existing defmodule for " (module->string mod))]
+        [(member mod documented-modules)
+         (~a "under an existing declare-exporting for " (module->string mod))]
+        [else #f]))
+    (write-stub-comment (make-string 48 #\=))
+    (unless module-advice
+      (term-bytes color:bold)
+      (write-string (~a "@defmodule[" (module->string mod) "]"))
+      (term-bytes color:reset)
       (newline))
     (cond
-      [(member mod documented-modules)
-       (write-stub-comment (~a "Suggestion: add these under the existing defmodule or "
-                               "declare-exporting for " (module->string mod)))]
+      [(null? (cdr groups))
+       (define advice
+         (filter values (list module-advice
+                              (and (pair? (caar groups)) (near-advice (caar groups))))))
+       ;; One comment line for each piece of advice
+       (for ([a (in-list advice)] [i (in-naturals)])
+         (write-stub-comment (~a (if (zero? i) (~a "Suggestion: add " (these missing) " ") "")
+                                 a
+                                 (if (< i (sub1 (length advice))) "," ""))))
+       (newline)
+       (for-each write-stub-def missing)]
       [else
-       (term-bytes color:bold)
-       (write-string (~a "@defmodule[" (module->string mod) "]"))
-       (term-bytes color:reset)
-       (newline)])
-    (newline)
-    (for ([b (in-list missing)])
-      (define siblings
-        (if (equal? (binding-source-module b) mod)
-            '()
-            (for/list ([d (in-list documented)]
-                       #:when (equal? (binding-source-module d) (binding-source-module b)))
-              (binding-id d))))
-      (unless (null? siblings)
-        (write-stub-comment (~a "Suggestion: add this near the existing docs for "
-                                (names-up-to siblings max-sibling-names))))
-      (write-stub-def b))))
+       (when module-advice
+         (write-stub-comment (~a "Suggestion: add these " module-advice)))
+       (newline)
+       (for ([g (in-list groups)])
+         (match-define (cons sibs bs) g)
+         (write-stub-comment (make-string 48 #\-))
+         (unless (null? sibs)
+           (write-stub-comment (~a "Suggestion: add " (these bs) " " (near-advice sibs)))
+           (newline))
+         (for-each write-stub-def bs))])))
 
 (module+ test
   (require rackunit)

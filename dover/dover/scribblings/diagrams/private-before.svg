@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="200" viewBox="0 0 560 200">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    .box { fill: #f7f7f7; stroke: #555; stroke-width: 1.2; }
+    .mod { font: 15px ui-monospace, Menlo, Consolas, monospace; fill: #222; }
+    .note { font: 12.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #555; }
+    .ok { font: 12.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #080; }
+    .bad { font: 12.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #c00; }
+    .badge { fill: #07a; }
+    .badge-text { font: bold 11px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #fff; }
+  </style>
+
+  <!-- Public modules -->
+  <rect class="box" x="20" y="24" width="190" height="54" rx="6"/>
+  <text class="mod" x="115" y="47" text-anchor="middle">mypkg</text>
+  <text class="ok" x="115" y="67" text-anchor="middle">✓ links to the docs</text>
+
+  <rect class="box" x="350" y="24" width="190" height="54" rx="6"/>
+  <text class="mod" x="445" y="47" text-anchor="middle">mypkg/lite</text>
+  <text class="bad" x="445" y="67" text-anchor="middle">✗ can’t find the docs</text>
+
+  <!-- Docs keyed to mypkg -->
+  <rect class="badge" x="170" y="14" width="44" height="20" rx="4"/>
+  <text class="badge-text" x="192" y="28" text-anchor="middle">docs</text>
+
+  <!-- Private module -->
+  <rect class="box" x="160" y="128" width="240" height="54" rx="6"/>
+  <text class="mod" x="280" y="151" text-anchor="middle">mypkg/private/widget</text>
+  <text class="note" x="280" y="171" text-anchor="middle">defines make-widget</text>
+
+  <!-- Each public module re-exports straight from the private one -->
+  <line x1="115" y1="78" x2="222" y2="126" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="445" y1="78" x2="338" y2="126" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text class="note" x="150" y="114" text-anchor="end">re-exports</text>
+  <text class="note" x="410" y="114">re-exports</text>
+</svg>

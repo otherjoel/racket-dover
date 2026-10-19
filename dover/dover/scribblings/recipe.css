@@ -1,0 +1,13 @@
+/* Let the diagrams shrink to fit narrow screens */
+.recipe-diagram {
+    max-width: 100%;
+    height: auto;
+}
+
+/* On narrow screens (manual-style.css switches to its mobile layout at 720px), scroll wide code
+   within its own box. Otherwise it widens the whole page, and the browser zooms out to fit it. */
+@media all and (max-width: 720px) {
+    .SCodeFlow {
+        overflow-x: auto;
+    }
+}

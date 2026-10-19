@@ -225,6 +225,7 @@
 ;; The SGR codes that Dover's text report uses, and the CSS class for each
 (define sgr-classes
   (hash "1" "term-bold"
+        "3" "term-italic"
         "31" "term-red"
         "32" "term-green"
         "33" "term-yellow"

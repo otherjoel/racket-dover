@@ -20,6 +20,7 @@
 }
 
 .term-bold { font-weight: bold; }
+.term-italic { font-style: italic; }
 .term-red { color: #c00; }
 .term-green { color: #080; }
 .term-yellow { color: #a60; }

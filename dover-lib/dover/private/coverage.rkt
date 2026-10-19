@@ -26,6 +26,7 @@
          module<?
          package-modules
          binding-documented?
+         module-has-defmodule?
          check-coverage
          module-coverage-total
          coverage-totals
@@ -299,6 +300,14 @@
       (remove-duplicates (map normalize-module-path (exported-index-desc-from-libs desc)))
       '()))
 
+;; True if the installed docs have a defmodule for mod. A defmodule declares a (mod-path "mod")
+;; tag (unless it has #:link-target? #f); declare-exporting declares no tag.
+(define (module-has-defmodule? mod)
+  (define str (if (symbol? mod) (symbol->string mod) (~s mod)))
+  (define-values (path _anchor)
+    (xref-tag->path+anchor (force collections-xref) (list 'mod-path str)))
+  (and path #t))
+
 ;; Each element of ignore is a module path (ignore every binding exported from or defined in that
 ;; module) or a list of a module path and ids (ignore only those ids).
 (define (ignored? r ignore)
@@ -480,6 +489,10 @@
   (define first-exporters (list (exporter 'racket 'first '((racket/list . first)) #t)
                                 (exporter 'racket/list 'first '() #t)))
   (check-equal? (documented-exporting-modules 'racket/list 'first) '(racket/list racket))
+  (check-true (module-has-defmodule? 'racket/list))
+  ;; Documented only through declare-exporting
+  (check-false (module-has-defmodule? 'compiler/commands/test))
+  (check-false (module-has-defmodule? 'no/such/module))
   (check-equal? (report-module first-exporters 'racket/private/list-predicates
                                '(racket/list racket))
                 'racket/list)

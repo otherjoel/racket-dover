@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="232" viewBox="0 0 560 232">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    .box { fill: #f7f7f7; stroke: #555; stroke-width: 1.2; }
+    .docs { fill: #eaf3f9; stroke: #07a; stroke-width: 1.2; }
+    .mod { font: 15px ui-monospace, Menlo, Consolas, monospace; fill: #222; }
+    .note { font: 12.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #555; }
+    .ok { font: 12.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #080; }
+    .code { font: 12.5px ui-monospace, Menlo, Consolas, monospace; fill: #07a; }
+    .badge { fill: #07a; }
+    .badge-text { font: bold 11px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #fff; }
+  </style>
+
+  <!-- The two public modules -->
+  <rect class="box" x="20" y="24" width="170" height="54" rx="6"/>
+  <text class="mod" x="105" y="47" text-anchor="middle">mypkg</text>
+  <text class="ok" x="105" y="67" text-anchor="middle">✓ links to the docs</text>
+
+  <rect class="box" x="340" y="24" width="200" height="54" rx="6"/>
+  <text class="mod" x="440" y="47" text-anchor="middle">mypkg/render</text>
+  <text class="note" x="440" y="67" text-anchor="middle">defines render-page</text>
+
+  <!-- Docs badge: the docs are keyed to the first module in declare-exporting -->
+  <rect class="badge" x="500" y="14" width="44" height="20" rx="4"/>
+  <text class="badge-text" x="522" y="28" text-anchor="middle">docs</text>
+
+  <!-- Re-export -->
+  <line x1="190" y1="51" x2="338" y2="51" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text class="note" x="264" y="43" text-anchor="middle">re-exports</text>
+
+  <!-- The docs, listing both modules -->
+  <rect class="docs" x="130" y="150" width="300" height="62" rx="6"/>
+  <text class="code" x="280" y="174" text-anchor="middle">@declare-exporting[mypkg/render mypkg]</text>
+  <text class="note" x="280" y="198" text-anchor="middle">Provided from: mypkg/render, mypkg</text>
+
+  <!-- Keyed to mypkg/render; mypkg is listed too -->
+  <line x1="380" y1="150" x2="430" y2="78" stroke="#07a" stroke-width="1.5"/>
+  <text class="note" x="414" y="124">keyed to</text>
+  <line x1="180" y1="150" x2="120" y2="78" stroke="#07a" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text class="note" x="94" y="124" text-anchor="end">also listed</text>
+</svg>
