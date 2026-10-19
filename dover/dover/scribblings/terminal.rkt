@@ -12,6 +12,8 @@
 ;; by tour/capture.rkt, and showing diagrams.
 
 (provide diagram
+         pic
+         video-link
          tour-file
          tour-output
          tour-tree)
@@ -25,6 +27,38 @@
   (centered (apply image (build-path diagrams-dir name)
                    #:style (style "diagram" (list (css-style-addition terminal-css)))
                    alt)))
+
+;; Like diagram, but at half size (for a 2x image) and not centered, so it's content that can go
+;; inside a hyperlink
+(define (pic name . alt)
+  (apply image (build-path diagrams-dir name)
+         #:scale 0.5
+         #:style (style "diagram" (list (css-style-addition terminal-css)))
+         alt))
+
+(define (video-link url name #:warning warning . alt)
+  (define id (string-append "cw-" (regexp-replace* #rx"[^a-zA-Z0-9]" name "-")))
+  (define (span class #:tag [tag "span"] #:attributes [attrs '()] . content)
+    (element (style class (list (css-style-addition terminal-css)
+                                (alt-tag tag)
+                                (attributes attrs)))
+             content))
+  (centered
+   (span "video-link"
+         (element (style #f (list (xexpr-property `(input ([type "checkbox"]
+                                                          [id ,id]
+                                                          [class "cw-toggle"]
+                                                          [aria-label ,(string-append "Show: " warning)]))
+                                                  "")))
+                  '())
+         ;; The video opens in a new tab
+         (hyperlink url (apply pic name alt) (span "play-button")
+                    #:style (style #f (list (attributes '([target . "_blank"]
+                                                          [rel . "noopener"])))))
+         (span "cw-label" #:tag "label" #:attributes `([for . ,id])
+               (span "cw-title" "Content warning")
+               (span "cw-topics" warning)
+               (span "cw-hint" "Click to show")))))
 
 (define (styled class content)
   (element (style class (list (css-style-addition terminal-css))) content))

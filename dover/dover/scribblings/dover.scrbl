@@ -417,14 +417,24 @@ Returns the fraction of the bindings in @racket[mcs] that are documented, or @ra
 @define[url-2]{https://github.com/lexi-lambda/racket-commonmark/blob/master/commonmark-test/tests/commonmark/spec.rkt}
 @define[url-3]{https://docs.racket-lang.org/doc-coverage/index.html}
 @define[url-4]{https://www.visidata.org/blog/2026/ai/#self-assessed-ai-level-for-contributions}
+@define[url-5]{https://github.com/otherjoel/racket-dover}
 
 Dover is a cleaned-up generalization of a @hyperlink[url-1]{utility I wrote in 2025} for the Congame
 project. I needed a quick way to check and score my progress on the documentation, and the module
 layout was complicated. Dover itself is a @hyperlink[url-4]{level 6} AI-assisted rework of that
 handwritten code.
 
+The source for Dover is available at @tt{@url[url-5]}.
+
 The code for the TUI progress bars was copied/adapted from Alexis King’s
 @hyperlink[url-2]{Commonmark parser test suite}.
 
 Jacqueline Firth’s @hyperlink[url-3]{Documentation Coverage} package also exists as prior art in
 this area.
+
+@bold{How do you pronounce “dover”? Is it like “over” or more like “cover”?}
+
+@define[doverboys]{https://youtu.be/cDN0LKfurCw?si=vX4A6tnZrl9YkwS1&t=179}
+
+@video-link[doverboys "hark.png" #:warning "smoking, alcohol"]{A still from the 1942 cartoon The
+Dover Boys: Dan Backslide, half hidden in a cloud of smoke, says “Hark.”}
