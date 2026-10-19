@@ -109,8 +109,8 @@ evaluates the @racket[body]s.}
 }|
 
 Here the first part is a sample use of the form. Scribble takes the first identifier as the name of
-the form, and typesets the others as placeholders for the pieces a user fills in. Use @racket[#:contracts]
-to give contracts for the pieces that are expressions. For a form with a more complicated grammar,
+the form, and typesets the others as placeholders for the pieces a user fills in. Use
+@racket[#:contracts] to give contracts for the pieces that are expressions. For a form with a more complicated grammar,
 use @racket[#:grammar], or see @racket[defform/subs].
 
 @section{Step 5: Build and check}
@@ -126,7 +126,7 @@ See @secref["tour"] for an example.
 @section[#:tag "recipe-reexports"]{When modules re-export each other}
 
 It’s common for a package’s main module to re-export the bindings from its other public modules,
-so that users can @racket[(require mypkg)] to get everything, or, for example, 
+so that users can @racket[(require mypkg)] to get everything, or, for example,
 @racket[(require mypkg/render)] for just those functions.
 
 If you document @racketidfont{render-page} under @racket[(defmodule mypkg/render)], it connects
@@ -147,8 +147,8 @@ yourself with @racket[declare-exporting]:
 }|
 
 The @racket[defmodule] still shows the @racket[require] line for @racketmodfont{mypkg/render}, and
-the @racket[declare-exporting] declares both modules. Now @racketidfont{render-page} is provided
-from @racketmodfont{mypkg/render} and @racketmodfont{mypkg}.
+the @racket[declare-exporting] declares both modules. Now the box for @racketidfont{render-page}
+says it’s provided from @racketmodfont{mypkg/render} and @racketmodfont{mypkg}.
 
 @diagram["reexport.svg"]{The mypkg module re-exports render-page from mypkg/render. The docs
 are keyed to mypkg/render, and also list mypkg.}
@@ -162,13 +162,13 @@ binding doesn’t pass through @racketmodfont{mypkg} on its way there.
 @section[#:tag "recipe-private"]{When public modules share a private module}
 
 Another common pattern is to keep some code in a private module, and have more than one public module
-re-export its bindings. Say @racketmodfont{mypkg} exports everything, and
+re-export its bindings. Say @racketmodfont{mypkg} exports everything and
 @racketmodfont{mypkg/lite} exports just the basics, and each gets @racketidfont{make-widget} straight
 from @racketmodfont{mypkg/private/widget}.
 
 If you document @racketidfont{make-widget} under @racket[(defmodule mypkg)], it won’t connect to
-its docs as exported by @racketmodfont{mypkg/lite}. To find the docs for @racketidfont{make-widget} as exported
-by @racketmodfont{mypkg/lite}, Scribble follows its re-exports back toward the definition, looking
+its docs as exported by @racketmodfont{mypkg/lite}. To find the docs for
+@racketidfont{make-widget} as exported by @racketmodfont{mypkg/lite}, Scribble follows its re-exports back toward the definition, looking
 for the module the docs are keyed to. That path goes from @racketmodfont{mypkg/lite} to
 @racketmodfont{mypkg/private/widget}, and never passes through @racketmodfont{mypkg}:
 
@@ -177,8 +177,8 @@ re-export make-widget from mypkg/private/widget, so make-widget as exported by m
 connect to its docs.}
 
 Any docs that mention @racketidfont{make-widget} as imported from @racketmodfont{mypkg/lite},
-including your own, end up with a broken link, and @exec{raco setup} warns about an undefined tag. Dover reports it
-as a @seclink["warnings"]{documentation warning}.
+including your own, end up with a broken link, and @exec{raco setup} warns about an undefined
+tag. Dover reports it as a @seclink["warnings"]{documentation warning}.
 
 The fix is @racket[#:use-sources], which keys the docs to the module that defines the binding:
 

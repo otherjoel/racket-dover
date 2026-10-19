@@ -43,7 +43,7 @@ The private module defines a counter:
 
 @tour-file["tally/private/counter.rkt"]
 
-The @racketmodfont{tally/base} module re-exports the counter on its own, and the main
+The @racketmodfont{tally/base} module re-exports just the counter, and the main
 @racketmodfont{tally} module re-exports @racketmodfont{tally/base} and adds two bindings of its own:
 
 @tour-file["tally/base.rkt"]
@@ -57,17 +57,17 @@ After installing the package, which also builds its docs, check it with @exec{ra
 
 @tour-output["check"]
 
-Dover finds two bindings that have no documentation. Notice that it and both under the
-@racketmodfont{tally} module. One of those bindings, @racketidfont{with-counter}, is actually defined
-in @filepath{tally/main.rkt}, so that makes sense. But the other one, @racketidfont{counter-value},
-is actually defined in the private submodule, then reexported from @racketmodfont{tally/base}
-@emph{and} from @racketmodfont{tally}. So how does Dover decide that documention from
-@racketidfont{counter-value} is supposed to go in the docs for the @racketmodfont{tally} module?
+Dover finds two bindings that have no documentation. Notice that it reports both under the
+@racketmodfont{tally} module. One of those bindings, @racketidfont{with-counter}, is defined in
+@filepath{tally/main.rkt}, so that makes sense. But the other one, @racketidfont{counter-value}, is
+defined in the private module, then re-exported from @racketmodfont{tally/base} @emph{and} from
+@racketmodfont{tally}. So how does Dover decide that the documentation for
+@racketidfont{counter-value} belongs in the docs for the @racketmodfont{tally} module?
 
 When the same binding comes from multiple places, Dover tries to be smart about which module it
-counts them against. In this case it sees that we have already documented most other bindings from
+reports it under. In this case it sees that we have already documented the other bindings from
 @racketmodfont{tally/private/counter} (@racketidfont{counter?}, @racketidfont{make-counter} and
-@racketidfont{counter-add!}) in the scribble docs for @racketmodfont{tally}, and that the
+@racketidfont{counter-add!}) in the Scribble docs for @racketmodfont{tally}, and that the
 undocumented @racketidfont{counter-value} is also exported from @racketmodfont{tally}. (See
 @secref["grouping"].)
 
@@ -91,7 +91,7 @@ bindings defined in the same module: @racketidfont{counter-value} near the other
 and @racketidfont{with-counter} near @racketidfont{tally}. Since these differ, each gets its own
 group, after a separator line.
 
-Now we’ll fix the docs by adding in the missing stubs and filling them in, and by adding the
+Now we’ll fix the docs by adding the missing stubs and filling them in, and by adding the
 @racket[#:use-sources] that the warnings suggest:
 
 @tour-file["tally-fixed.scrbl"
@@ -111,7 +111,8 @@ After rebuilding the docs, the check comes back clean:
 
 For each installed @nonterm{pkg}, Dover finds the package's modules, collects the bindings they
 export at phase 0, and looks each binding up in the installed documentation. It prints the bindings
-that are missing documentation, grouped by module, followed by a coverage summary.
+that are missing documentation, grouped by module, followed by a coverage summary and any
+@seclink["warnings"]{documentation warnings}.
 
 Valid flags for @nonterm{options}:
 
@@ -120,7 +121,8 @@ Valid flags for @nonterm{options}:
        modules listed in @racketidfont{dover-consider-private}.}
  @item{@DFlag{ignore} @nonterm{module} or @DFlag{ignore} @nonterm{module}@litchar{:}@nonterm{id}
        --- ignore every binding from @nonterm{module}, or just the binding @nonterm{id}. The
-       @nonterm{module} can be any module that exports the binding or the one that defines it.
+       @nonterm{module} can be any checked module that exports the binding, or the one that
+       defines it.
        This flag can be given more than once.}
  @item{@DFlag{min} @nonterm{percent} --- exit with status 1 if coverage is below
        @nonterm{percent}. Overrides @racketidfont{dover-min-coverage}.}
@@ -155,8 +157,8 @@ Valid flags for @nonterm{options}:
 By default, Dover checks every @filepath{.rkt} file in the package's collections, except:
 
 @itemlist[
- @item{files in directories named @filepath{private}, @filepath{compiled} or
-       @filepath{scribblings}, or whose name starts with @litchar{.};}
+ @item{files in directories that are named @filepath{private}, @filepath{compiled} or
+       @filepath{scribblings}, or whose names start with @litchar{.};}
  @item{@filepath{info.rkt} files and @filepath{lang/reader.rkt} modules;}
  @item{paths excluded by a @racketidfont{compile-omit-paths} field in any @filepath{info.rkt},
        since @exec{raco setup} does not compile them either.}
@@ -206,17 +208,18 @@ its definition. Ties go to the module that sorts first.}
 
 @itemlist[
  
-@item{A documented binding goes under the first module that its documentation says exports it, as
-given by @racket[defmodule] or @racket[declare-exporting]. For example, after
-@racket[(declare-exporting mypkg/element mypkg/core)], the bindings in that section are reported
-under @racketmodfont{mypkg/element}.}
- 
-@item{A missing binding whose siblings are documented is reported under the module that most of them
-are reported under, if that module also exports it. So if @racketmodfont{mypkg/private/impl} defines
+@item{A documented binding goes under the first module that its documentation says exports it (as
+given by @racket[defmodule] or @racket[declare-exporting]) and that does export it. For example,
+after @racket[(declare-exporting mypkg/element mypkg/core)], the bindings in that section are
+reported under @racketmodfont{mypkg/element}.}
+
+@item{A missing binding that has @deftech{siblings} (documented bindings defined in the same module)
+is reported under the module that most of them are reported under, if that module also exports
+it. So if @racketmodfont{mypkg/private/impl} defines
 several bindings that are documented under @racketmodfont{mypkg}, a missing one that
 @racketmodfont{mypkg} also exports is reported under @racketmodfont{mypkg}, next to the others.}
 
-@item{Any other missing binding goes under the checked module nearest to its definition. If the
+@item{Any other binding goes under the checked module nearest to its definition. If the
 module that defines it is checked, that is the module; otherwise it is the first checked module that
 re-exports it, working outward from the definition. So a missing binding defined in
 @racketmodfont{mypkg/private/impl} and re-exported by @racketmodfont{mypkg/element} (which is in
@@ -230,7 +233,8 @@ When two modules are equally near, or have equally many siblings, the one that s
 @subsection[#:tag "warnings"]{Documentation warnings}
 
 Besides missing documentation, Dover reports two problems with documented bindings, each with a
-suggested fix. Warnings do not affect the coverage score.
+suggested fix. Warnings do not affect the coverage score, and they affect the exit status only
+when you give @DFlag{strict}.
 
 @itemlist[
  @item{@bold{Binding doesn’t connect to its docs.} A documented binding should connect to its
@@ -256,8 +260,9 @@ suggested fix. Warnings do not affect the coverage score.
        @itemlist[
         @item{If each public module gives the binding its public name itself, as with
               @racket[(provide (rename-out [%make-widget make-widget]))] in both
-              @racketmodfont{mypkg/a} and @racketmodfont{mypkg/b}, no module on
-              @racketmodfont{mypkg/b}’s path exports it as @racketidfont{make-widget}. Give it
+              @racketmodfont{mypkg/a} and @racketmodfont{mypkg/b}, no module between
+              @racketmodfont{mypkg/b} and the definition exports it as
+              @racketidfont{make-widget}. Give it
               that name in one module that both re-export it from, and add that module to the
               @racket[#:use-sources]; or have @racketmodfont{mypkg/b} re-export it from
               @racketmodfont{mypkg/a}.}
@@ -312,7 +317,8 @@ optional.
 
  @item{@racketidfont{dover-modules} --- a list of the modules to check. When present, Dover skips
        module discovery and @racketidfont{dover-never-ignore} and checks exactly these
-       modules, minus any in @racketidfont{dover-consider-private}.}
+       modules, minus any in @racketidfont{dover-consider-private} (unless
+       @DFlag{include-private} is given).}
 
  @item{@racketidfont{dover-min-coverage} --- a number from 0 to 100. When coverage is below it,
        @exec{raco dover check} exits with status 1. The @DFlag{min} flag overrides it.}
@@ -324,8 +330,9 @@ After installing your package and building its docs, run:
 
 @commandline{raco dover check --strict --min 100 mypkg-lib}
 
-For a package split into @filepath{-lib} and @filepath{-doc} packages, check the package that
-contains the modules, since that is where the bindings are defined.
+For a package split into @tt{-lib} and @tt{-doc} packages, check the package that contains the
+modules, since that is where the bindings are defined. Install the @tt{-doc} package too, so that
+its docs are built.
 
 @include-section["recipe.scrbl"]
 
@@ -395,14 +402,16 @@ The documentation says the warning's module exports its binding, but the module 
 The result of @racket[check-coverage]. The @racket[scored] field covers bindings defined in the
 checked packages, and @racket[unscored] covers bindings re-exported from other packages. The
 @racket[warnings] field holds the documentation warnings for scored bindings. The @racket[errors]
-field pairs each module that could not be loaded with the error message.}
+field pairs each module that could not be loaded with its error message.}
 
 @defproc[(package-modules [pkg string?]
                           [#:include-private? include-private? any/c #f])
          (listof module-path?)]{
-Returns the modules in the installed package @racket[pkg], following the rules in
-@secref["modules"], sorted so that each module comes before the modules nested
-under it.}
+Returns the modules in the installed package @racket[pkg], found as described in
+@secref["modules"] but without any of the configuration from @filepath{info.rkt} other than
+@racketidfont{compile-omit-paths}. Modules in @filepath{private} directories are included only if
+@racket[include-private?] is true. The result is sorted so that each module comes before its
+submodules and the modules nested under it.}
 
 @defproc[(check-coverage [mods (listof module-path?)]
                          [#:packages pkgs (listof string?)]
@@ -438,8 +447,8 @@ handwritten code.
 
 The source for Dover is available at @tt{@url[url-5]}.
 
-The code for the TUI progress bars was copied/adapted from Alexis King’s
-@hyperlink[url-2]{Commonmark parser test suite}.
+The code for the TUI progress bars was copied and adapted from Alexis King’s
+@hyperlink[url-2]{CommonMark parser test suite}.
 
 Jacqueline Firth’s @hyperlink[url-3]{Documentation Coverage} package also exists as prior art in
 this area.
