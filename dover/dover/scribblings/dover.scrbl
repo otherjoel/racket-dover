@@ -18,6 +18,14 @@ Dover checks a set of one or more packages and scores them on how many of their 
 have Scribble documentation. Use it from the command line while you write docs, or in CI to keep
 coverage from slipping.
 
+Installation:
+
+@commandline{raco pkg install dover}
+
+To use:
+
+@commandline{raco dover check @nonterm{options} @nonterm{pkg} ...}
+
 Dover reads the documentation that is already installed, so a package's docs must be built (normally
 by @exec{raco pkg install} or @exec{raco setup}) before Dover can see them.
 
@@ -96,6 +104,8 @@ After rebuilding the docs, the check comes back clean:
 @tour-output["check-fixed"]
 
 @section{Checking a package}
+
+@subsection[#:tag "raco-dover"]{@exec{raco dover check}}
 
 @commandline{raco dover check @nonterm{options} @nonterm{pkg} ...}
 
@@ -254,8 +264,6 @@ suggested fix. Warnings do not affect the coverage score.
        @racket[defmodule] or @racket[declare-exporting]), but the module doesn't. Either remove
        the module from the declaration or export the binding from it.}
 ]
-
-@subsection{Command-line flags}
 
 @subsection{Configuration in @filepath{info.rkt}}
 
