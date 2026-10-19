@@ -406,3 +406,25 @@ Returns the number of bindings in @racket[mc], documented or not.}
 @defproc[(coverage-ratio [mcs (listof module-coverage?)]) (or/c (between/c 0 1) #f)]{
 Returns the fraction of the bindings in @racket[mcs] that are documented, or @racket[#f] if
 @racket[mcs] contains no bindings.}
+
+@;===============================================
+
+@section{Acknowledgements}
+
+@;------------------------------------------------
+
+@define[url-1]{https://github.com/MarcKaufmann/congame/pull/173}
+@define[url-2]{https://github.com/lexi-lambda/racket-commonmark/blob/master/commonmark-test/tests/commonmark/spec.rkt}
+@define[url-3]{https://docs.racket-lang.org/doc-coverage/index.html}
+@define[url-4]{https://www.visidata.org/blog/2026/ai/#self-assessed-ai-level-for-contributions}
+
+Dover is a cleaned-up generalization of a @hyperlink[url-1]{utility I wrote in 2025} for the Congame
+project. I needed a quick way to check and score my progress on the documentation, and the module
+layout was complicated. Dover itself is a @hyperlink[url-4]{level 6} AI-assisted rework of that
+handwritten code.
+
+The code for the TUI progress bars was copied/adapted from Alexis King’s
+@hyperlink[url-2]{Commonmark parser test suite}.
+
+Jacqueline Firth’s @hyperlink[url-3]{Documentation Coverage} package also exists as prior art in
+this area.
