@@ -265,7 +265,11 @@
 
 ;; The scored section is grouped by the module each binding is reported under; the unscored
 ;; section by the package that defines it.
-(define (write-text-report report pkgs #:show-reexported? [show-reexported? #f])
+;; docs-pkgs : (listof (cons string (listof string))), the docs packages whose dover-* fields were
+;;             used, each with the packages it has docs for
+(define (write-text-report report pkgs
+                           #:show-reexported? [show-reexported? #f]
+                           #:docs-packages [docs-pkgs '()])
   (define scored (coverage-report-scored report))
   (define unscored
     (if show-reexported? (by-source-package (coverage-report-unscored report)) '()))
@@ -276,6 +280,11 @@
                   (string-length (module->string (module-coverage-module mc))))))
   (totals-width
    (string-length (~a (for/sum ([mc (in-list all)]) (module-coverage-total mc)))))
+  (for ([d (in-list docs-pkgs)])
+    (term-bytes color:gray)
+    (printf "Using the dover-* fields in ~a, which has the docs for ~a\n"
+            (car d) (string-join (cdr d) ", "))
+    (term-bytes color:reset))
   (cond
     [(null? scored)
      (printf "No bindings to check in ~a.\n" (string-join pkgs ", "))]
@@ -334,10 +343,12 @@
     [_ base]))
 
 ;; notices : (listof string), problems with the check itself (such as docs not being built)
-(define (write-json-report report pkgs notices)
+;; config-pkgs : (listof string), the packages whose dover-* fields were used
+(define (write-json-report report pkgs notices #:config-packages [config-pkgs '()])
   (match-define (coverage-report scored unscored warnings errors) report)
   (write-json
    (hasheq 'packages pkgs
+           'config_packages config-pkgs
            'scored (coverage->jsexpr scored 'modules 'module)
            'unscored (coverage->jsexpr (by-source-package unscored) 'packages 'package)
            'warnings (map warning->jsexpr warnings)

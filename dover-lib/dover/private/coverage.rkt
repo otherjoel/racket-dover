@@ -27,6 +27,8 @@
          package-modules
          binding-documented?
          module-has-defmodule?
+         module-doc-package
+         module-path-package
          check-coverage
          module-coverage-total
          coverage-totals
@@ -128,6 +130,13 @@
                    [(cons (? path? p) _submods) (path->pkg p #:cache pkg-cache)]
                    [(? path? p) (path->pkg p #:cache pkg-cache)]
                    [_ #f])))))
+
+;; Returns the package that mod belongs to, without loading it, or #f if there's none
+(define (module-path-package mod)
+  (with-handlers ([exn:fail? (λ (_e) #f)])
+    (match (resolved-module-path-name (module-path-index-resolve (module-path-index-join mod #f)))
+      [(or (? path? p) (cons (? path? p) _)) (path->pkg p #:cache pkg-cache)]
+      [_ #f])))
 
 (define (mpi->module-path mpi)
   (define name (resolved-module-path-name (module-path-index-resolve mpi)))
@@ -306,13 +315,45 @@
       (remove-duplicates (map normalize-module-path (exported-index-desc-from-libs desc)))
       '()))
 
-;; True if the installed docs have a defmodule for mod. A defmodule declares a (mod-path "mod")
-;; tag (unless it has #:link-target? #f); declare-exporting declares no tag.
-(define (module-has-defmodule? mod)
+;; Returns the rendered page that has the defmodule for mod, or #f if the installed docs have
+;; none. A defmodule declares a (mod-path "mod") tag (unless it has #:link-target? #f);
+;; declare-exporting declares no tag.
+(define (defmodule-page mod)
   (define str (if (symbol? mod) (symbol->string mod) (~s mod)))
   (define-values (path _anchor)
     (xref-tag->path+anchor (force collections-xref) (list 'mod-path str)))
-  (and path #t))
+  path)
+
+(define (module-has-defmodule? mod)
+  (and (defmodule-page mod) #t))
+
+;; Docs in the installation's doc directory aren't inside any package, so they're matched by name
+;; to the package whose `scribblings` field lists them
+(define doc-packages-by-name
+  (delay
+    (for*/hash ([dir (in-list (find-relevant-directories '(scribblings) 'all-available))]
+                [info (in-value (get-info/full dir))]
+                #:when info
+                [doc (in-list (match (info 'scribblings (λ () '()))
+                                [(? list? docs) docs]
+                                [_ '()]))]
+                #:when (and (pair? doc) (path-string? (car doc))))
+      (values (match doc
+                [(list _ _ _ (? string? name) _ ...) name]
+                [(cons src _)
+                 (path->string (path-replace-extension (file-name-from-path src) #""))])
+              (path->pkg dir #:cache pkg-cache)))))
+
+;; Returns the package whose docs have the defmodule for mod, or #f if there's none. A document's
+;; pages are rendered to a directory named after it: inside the package, for a linked or
+;; user-scope package, or else in the installation's doc directory.
+(define (module-doc-package mod)
+  (define page (defmodule-page mod))
+  (and page
+       (or (path->pkg page #:cache pkg-cache)
+           (let*-values ([(dir _name _dir?) (split-path page)]
+                         [(_base doc-name _dir?) (split-path dir)])
+             (hash-ref (force doc-packages-by-name) (path->string doc-name) #f)))))
 
 ;; Each element of ignore is a module path (ignore every binding exported from or defined in that
 ;; module) or a list of a module path and ids (ignore only those ids).

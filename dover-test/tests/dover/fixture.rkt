@@ -13,7 +13,9 @@
          setup/dirs)
 
 (provide call-with-fixture
+         call-with-fixtures
          dover-check
+         dover-exit-status
          replace-fixture-docs!)
 
 (define-runtime-path fixtures-dir "fixtures/")
@@ -39,19 +41,27 @@
 ;; Installs a copy of fixtures/<name> and calls proc with the copy's directory. The fixture's
 ;; directory name is its package name.
 (define (call-with-fixture name proc)
-  (when (pkg-directory name)
-    (error 'call-with-fixture "a package named ~a is already installed" name))
+  (call-with-fixtures (list name) proc))
+
+;; Like call-with-fixture, but installs several fixtures together and calls proc with each copy's
+;; directory
+(define (call-with-fixtures names proc)
+  (for ([name (in-list names)])
+    (when (pkg-directory name)
+      (error 'call-with-fixtures "a package named ~a is already installed" name)))
   (define tmp (make-temporary-directory "dover-test-~a"))
-  (define dir (build-path tmp name))
-  (copy-directory/files (build-path fixtures-dir name) dir)
+  (define dirs (for/list ([name (in-list names)]) (build-path tmp name)))
+  (for ([name (in-list names)] [dir (in-list dirs)])
+    (copy-directory/files (build-path fixtures-dir name) dir))
   (dynamic-wind
    void
    (λ ()
-     (raco! "pkg" "install" "--link" (path->string dir))
-     (proc dir))
+     (apply raco! "pkg" "install" "--link" (map path->string dirs))
+     (apply proc dirs))
    (λ ()
-     (when (pkg-directory name)
-       (raco! "pkg" "remove" name))
+     (define installed (filter pkg-directory names))
+     (unless (null? installed)
+       (apply raco! "pkg" "remove" installed))
      (delete-directory/files tmp))))
 
 ;; Returns the JSON report of `raco dover check` for pkg
@@ -59,6 +69,12 @@
   (define-values (_status output)
     (apply run-raco "dover" "check" "-f" "json" (append flags (list pkg))))
   (string->jsexpr output))
+
+;; Returns the exit status of `raco dover check` for pkg
+(define (dover-exit-status pkg . flags)
+  (define-values (status _output)
+    (apply run-raco "dover" "check" "-f" "json" (append flags (list pkg))))
+  status)
 
 ;; Replaces the installed fixture's docs (at rel-path in dir) with fixtures/<file>, and rebuilds
 ;; them

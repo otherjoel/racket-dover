@@ -276,7 +276,8 @@ when you give @DFlag{strict}.
 
 @subsection{Configuration in @filepath{info.rkt}}
 
-Dover reads the following fields from the package's top-level @filepath{info.rkt}. All are
+Dover reads the following fields from the package's top-level @filepath{info.rkt}, and also from
+the @filepath{info.rkt} of each package that has its docs (see @secref["docs-package"]). All are
 optional.
 
 @itemlist[
@@ -324,15 +325,39 @@ optional.
        @exec{raco dover check} exits with status 1. The @DFlag{min} flag overrides it.}
 ]
 
+@subsubsection[#:tag "docs-package"]{Configuration in split lib/doc packages}
+
+When a package's docs are in another package, such as a @tt{-doc} package, you can put these
+fields in either package's @filepath{info.rkt}. Before it checks a package, Dover looks up the
+@racket[defmodule] for each of the package's modules in the installed docs, and reads the fields of
+each other package that has one of those @racket[defmodule]s. (A module documented only with
+@racket[declare-exporting] doesn't lead Dover to a package.)
+
+Dover combines the fields from both packages:
+
+@itemlist[
+ @item{It uses all the entries in @racketidfont{dover-ignore} and
+       @racketidfont{dover-consider-private}.}
+ @item{From the package that has the docs, it uses only the entries in
+       @racketidfont{dover-modules} and @racketidfont{dover-never-ignore} for modules in the
+       package being checked. A package that has docs can also document other packages, or have
+       modules of its own.}
+ @item{A @racketidfont{dover-min-coverage} in the package being checked wins.}
+]
+
+The text report starts with a line that names each package with docs whose fields Dover used. The
+JSON report lists in @tt{config_packages} each package whose fields Dover used.
+
 @subsection{Using Dover in CI}
 
 After installing your package and building its docs, run:
 
 @commandline{raco dover check --strict --min 100 mypkg-lib}
 
-For a package split into @tt{-lib} and @tt{-doc} packages, check the package that contains the
-modules, since that is where the bindings are defined. Install the @tt{-doc} package too, so that
-its docs are built.
+For a package split into @tt{-lib} and @tt{-doc} packages, this command must check the @tt{-lib}
+package since that is where the bindings are defined. Ensure the @tt{-doc} package is installed
+before the check, so that its docs are built. The Dover fields can go in the @filepath{info.rkt} of
+either package; see @secref["docs-package"].
 
 @include-section["recipe.scrbl"]
 

@@ -40,6 +40,32 @@
           (field 'dover-min-coverage (λ (v) (and (real? v) (<= 0 v 100)))
                  "a number from 0 to 100" #f)))
 
+(define (config-empty? cfg)
+  (equal? cfg (config #f '() '() '() #f)))
+
+;; Returns the other installed packages that have the defmodules for mods
+(define (docs-packages pkg mods)
+  (sort (remove-duplicates
+         (for*/list ([mod (in-list mods)]
+                     [docs-pkg (in-value (module-doc-package mod))]
+                     #:when (and docs-pkg (not (equal? docs-pkg pkg))))
+           docs-pkg))
+        string<?))
+
+;; Merges the config of the packages that have pkg's docs into pkg's own. A docs package can
+;; document other packages too, or have modules of its own, so only its dover-modules and
+;; dover-never-ignore entries for pkg's modules count. A dover-min-coverage in pkg wins.
+(define (merge-docs-configs pkg own docs)
+  (define (in-pkg mods)
+    (filter (λ (mod) (equal? (module-path-package mod) pkg)) mods))
+  (define docs-modules (in-pkg (append* (filter values (map config-modules docs)))))
+  (config (and (or (config-modules own) (pair? docs-modules))
+               (remove-duplicates (append (or (config-modules own) '()) docs-modules)))
+          (append (config-ignore own) (append-map config-ignore docs))
+          (append (config-never-ignore own) (in-pkg (append-map config-never-ignore docs)))
+          (append (config-consider-private own) (append-map config-consider-private docs))
+          (or (config-min-coverage own) (ormap config-min-coverage docs))))
+
 ;; Modules in dover-consider-private are treated like modules in private/ directories: skipped
 ;; unless include-private? is true. Modules in dover-never-ignore are always checked.
 (define (config-modules* cfg pkg include-private?)
@@ -105,7 +131,29 @@
                    #:strict? strict?
                    #:format fmt
                    #:show-reexported? [show-reexported? #f])
-  (define configs (map read-config pkgs))
+  (define own-configs (map read-config pkgs))
+  ;; First pass: the defmodules for each package's modules show which packages have its docs.
+  ;; Their dover-* fields apply too.
+  (define docs-pkgs
+    (for/list ([pkg (in-list pkgs)] [cfg (in-list own-configs)])
+      (docs-packages pkg (config-modules* cfg pkg include-private?))))
+  (define docs-configs
+    (for/hash ([docs-pkg (in-list (remove-duplicates (append* docs-pkgs)))])
+      (values docs-pkg (read-config docs-pkg))))
+  (define configs
+    (for/list ([pkg (in-list pkgs)] [cfg (in-list own-configs)] [dps (in-list docs-pkgs)])
+      (merge-docs-configs pkg cfg (for/list ([d (in-list dps)]) (hash-ref docs-configs d)))))
+  ;; The docs packages whose dover-* fields were used, each with the packages it has docs for
+  (define used-docs-pkgs
+    (for/list ([d (in-list (sort (hash-keys docs-configs) string<?))]
+               #:unless (config-empty? (hash-ref docs-configs d)))
+      (cons d (for/list ([pkg (in-list pkgs)] [dps (in-list docs-pkgs)] #:when (member d dps))
+                pkg))))
+  (define config-pkgs
+    (append (for/list ([pkg (in-list pkgs)] [cfg (in-list own-configs)]
+                       #:unless (config-empty? cfg))
+              pkg)
+            (map car used-docs-pkgs)))
   (define mods
     (sort (remove-duplicates
            (append* (for/list ([pkg (in-list pkgs)] [cfg (in-list configs)])
@@ -136,8 +184,10 @@
 
   (parameterize ([current-internal-module-fix internal-module-fix])
     (case fmt
-      [(text) (write-text-report report pkgs #:show-reexported? show-reexported?)]
-      [(json) (write-json-report report pkgs notices)]
+      [(text) (write-text-report report pkgs
+                                 #:show-reexported? show-reexported?
+                                 #:docs-packages used-docs-pkgs)]
+      [(json) (write-json-report report pkgs notices #:config-packages config-pkgs)]
       [(stubs) (write-scribble-stubs report)]))
   (flush-output)
   (unless (eq? fmt 'json)
@@ -192,6 +242,21 @@
 
 (module+ test
   (require rackunit)
+
+  ;; Only the docs package's entries for dover's own modules count
+  (define own (config #f '(a) '() '() #f))
+  (define docs (config '(dover dover-test/no-such-module) '(b) '(dover/private/check)
+                       '(c) 50))
+  (check-equal? (merge-docs-configs "dover-lib" own (list docs))
+                (config '(dover) '(a b) '(dover/private/check) '(c) 50))
+  ;; A docs package's dover-modules with none of pkg's modules leaves discovery alone
+  (check-equal? (config-modules (merge-docs-configs "dover-lib" own
+                                                    (list (config '(scribble/manual) '() '() '()
+                                                                  #f))))
+                #f)
+  (check-equal? (config-min-coverage
+                 (merge-docs-configs "dover-lib" (config #f '() '() '() 90) (list docs)))
+                90)
   (define (fix mod #:include-private? [ip? #f])
     (internal-fix-for mod
                       #:never-ignore '(p/a p/private/x)

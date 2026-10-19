@@ -14,7 +14,8 @@ claims that aren't true (with a suggested fix for each), and can print `defproc`
 is missing (`--format stubs`). In CI, `--min <percent>` fails the build when coverage falls below that percent, and
 `--strict` fails it when there are warnings.
 
-Configuration such as bindings to ignore goes in the package's `info.rkt`.
+Configuration such as bindings to ignore goes in the `info.rkt` of the package, or of the package
+that has its docs.
 
 **Documentation is at: <https://joeldueck.com/what-about/dover/>**
 
