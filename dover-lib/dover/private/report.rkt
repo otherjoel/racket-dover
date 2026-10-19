@@ -54,7 +54,7 @@
   (match-define (doc-warning b mod) w)
   (match w
     [(? unreachable-docs-warning?)
-     (format "~a: ~a is documented, but uses of it from this module can't link to the docs"
+     (format "~a: ~a is documented, but as exported by this module it doesn't connect to its docs"
              (module->string mod) (id-in b mod))]
     [(? export-claim-warning?)
      (format "~a: the docs say this module exports ~a, but it doesn't"
@@ -227,9 +227,10 @@
 (define (write-unreachable-warnings mod ws)
   (unless (null? ws)
     (define one? (null? (cdr ws)))
-    (printf "  ~a documented, but uses of ~a from this module can't link to the docs:\n"
+    (printf "  ~a documented, but as exported by this module ~a connect to ~a docs:\n"
             (if one? "This binding is" "These bindings are")
-            (if one? "it" "them"))
+            (if one? "it doesn't" "they don't")
+            (if one? "its" "their"))
     ;; Bindings that need different #:use-sources are listed separately, each with its fix
     (for ([g (in-list (group-by-key ws (λ (w) (use-sources-key (doc-warning-binding w)))))])
       (match-define (cons key g-ws) g)

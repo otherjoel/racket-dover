@@ -134,10 +134,10 @@ It’s common for a package’s main module to re-export the bindings from its o
 so that users can @racket[(require mypkg)] to get everything, or @racket[(require mypkg/render)]
 for just the rendering functions.
 
-If you document @racketidfont{render-page} under @racket[(defmodule mypkg/render)], links to it
-will work from both modules. When Scribble looks up @racketidfont{render-page} as exported by
-@racketmodfont{mypkg}, it follows the re-export to @racketmodfont{mypkg/render} and finds the docs
-there. But your docs only tell readers about one of the two: the box at the top of
+If you document @racketidfont{render-page} under @racket[(defmodule mypkg/render)], it connects
+to its docs as exported by either module. To find the docs for @racketidfont{render-page} as
+exported by @racketmodfont{mypkg}, Scribble follows the re-export to @racketmodfont{mypkg/render}
+and finds the docs there. But your docs only tell readers about one of the two: the box at the top of
 @racketidfont{render-page}’s entry says it’s provided from @racketmodfont{mypkg/render}.
 
 To list both modules, add @racket[#:no-declare] to the @racket[defmodule] and declare the modules
@@ -160,9 +160,9 @@ are keyed to mypkg/render, and also list mypkg.}
 
 The order of the modules matters. Scribble keys your docs to the binding as exported by the first
 module, so list the module that defines the binding (or the one nearest to it) first. If you list
-@racketmodfont{mypkg} first, the docs are keyed to @racketmodfont{mypkg}, and a lookup from
-@racketmodfont{mypkg/render} never reaches them: the binding doesn’t pass through
-@racketmodfont{mypkg} on its way there.
+@racketmodfont{mypkg} first, the docs are keyed to @racketmodfont{mypkg}, and
+@racketidfont{render-page} as exported by @racketmodfont{mypkg/render} doesn’t connect to them: the
+binding doesn’t pass through @racketmodfont{mypkg} on its way there.
 
 @section[#:tag "recipe-private"]{When public modules share a private module}
 
@@ -171,17 +171,18 @@ re-export from it directly. Say @racketmodfont{mypkg} exports everything, and
 @racketmodfont{mypkg/lite} exports just the basics, and each gets @racketidfont{make-widget} straight
 from @racketmodfont{mypkg/private/widget}.
 
-If you document @racketidfont{make-widget} under @racket[(defmodule mypkg)], links to it from
-@racketmodfont{mypkg/lite} won’t work. To find the docs for @racketidfont{make-widget} as exported
+If you document @racketidfont{make-widget} under @racket[(defmodule mypkg)], it won’t connect to
+its docs as exported by @racketmodfont{mypkg/lite}. To find the docs for @racketidfont{make-widget} as exported
 by @racketmodfont{mypkg/lite}, Scribble follows its re-exports back toward the definition, looking
 for the module the docs are keyed to. That path goes from @racketmodfont{mypkg/lite} to
 @racketmodfont{mypkg/private/widget}, and never passes through @racketmodfont{mypkg}:
 
 @diagram[private-before-svg]{The docs are keyed to mypkg. Both mypkg and mypkg/lite
-re-export make-widget from mypkg/private/widget, so a lookup from mypkg/lite never reaches mypkg.}
+re-export make-widget from mypkg/private/widget, so make-widget as exported by mypkg/lite doesn’t
+connect to its docs.}
 
-Any docs that link to @racketidfont{make-widget} through @racketmodfont{mypkg/lite}, including your
-own, end up with a broken link, and @exec{raco setup} warns about an undefined tag. Dover reports it
+Any docs that mention @racketidfont{make-widget} as imported from @racketmodfont{mypkg/lite},
+including your own, end up with a broken link, and @exec{raco setup} warns about an undefined tag. Dover reports it
 as a @seclink["warnings"]{documentation warning}.
 
 The fix is @racket[#:use-sources], which keys the docs to the module that defines the binding:
@@ -191,13 +192,13 @@ The fix is @racket[#:use-sources], which keys the docs to the module that define
 @defmodule[mypkg #:use-sources (mypkg/private/widget)]
 }|
 
-Every re-export leads back to the definition, so now a lookup from any module that re-exports
-@racketidfont{make-widget} finds the docs:
+Every re-export leads back to the definition, so now @racketidfont{make-widget} connects to its
+docs as exported by any module that re-exports it:
 
 @diagram[private-after-svg]{The docs are keyed to mypkg/private/widget, where make-widget
-is defined, so lookups from both mypkg and mypkg/lite reach them.}
+is defined, so make-widget connects to them as exported by both mypkg and mypkg/lite.}
 
-The @racket[#:use-sources] option fixes the links; it doesn’t change which modules your docs say
+The @racket[#:use-sources] option fixes the connection; it doesn’t change which modules your docs say
 the binding is provided from. To list @racketmodfont{mypkg/lite} there too, combine it with the
 approach from @secref["recipe-reexports"]:
 

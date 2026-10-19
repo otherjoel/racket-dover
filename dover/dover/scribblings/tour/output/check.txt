@@ -12,7 +12,7 @@ Total [31m███████████████████████
 [1mDocumentation warnings (3)(B[m
 ─────────────────────────────────────────────────────────────────
 [33mtally/base:
-(B[m  These bindings are documented, but uses of them from this module can't link to the docs:
+(B[m  These bindings are documented, but as exported by this module they don't connect to their docs:
     counter-add!
     counter?
     make-counter

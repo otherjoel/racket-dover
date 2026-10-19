@@ -16,11 +16,11 @@
   <!-- Public modules -->
   <rect class="box" x="20" y="24" width="190" height="54" rx="6"/>
   <text class="mod" x="115" y="47" text-anchor="middle">mypkg</text>
-  <text class="ok" x="115" y="67" text-anchor="middle">✓ links to the docs</text>
+  <text class="ok" x="115" y="67" text-anchor="middle">✓ connects to the docs</text>
 
   <rect class="box" x="350" y="24" width="190" height="54" rx="6"/>
   <text class="mod" x="445" y="47" text-anchor="middle">mypkg/lite</text>
-  <text class="ok" x="445" y="67" text-anchor="middle">✓ links to the docs</text>
+  <text class="ok" x="445" y="67" text-anchor="middle">✓ connects to the docs</text>
 
   <!-- Private module, where the docs are now keyed -->
   <rect class="box" x="160" y="128" width="240" height="54" rx="6"/>

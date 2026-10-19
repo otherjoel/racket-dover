@@ -57,7 +57,8 @@
 
 ;; Documentation hygiene problems for a documented binding
 (struct doc-warning (binding module) #:transparent)
-;; Scribble can't find the binding's docs from module, which exports it
+;; The binding is documented, but as exported by module, which exports it, it doesn't connect to
+;; its docs
 (struct unreachable-docs-warning doc-warning () #:transparent)
 ;; The docs say module exports the binding, but it doesn't
 (struct export-claim-warning doc-warning () #:transparent)
@@ -531,7 +532,8 @@
   (check-equal? (map (λ (b) (cons (binding-id b) (binding-module b))) placed)
                 '((foo . m/a) (qux . m/a) (bar . m/a) (baz . m/z) (zap . m/z)))
 
-  ;; Warnings: m/b can't reach the docs, and the docs claim m/c exports foo
+  ;; Warnings: foo as exported by m/b doesn't connect to its docs, and the docs claim m/c exports
+  ;; foo
   (define documented-foo
     (binding 'm/a 'foo 'value 'm/private/impl 'foo "pkg"
              (list (exporter 'm/a 'foo '() #t) (exporter 'm/b 'foo '() #f))

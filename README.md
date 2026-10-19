@@ -8,11 +8,11 @@ $ raco pkg install dover
 $ raco dover check mypkg-lib
 ```
 
-It reports missing documentation per module, warns about docs that Scribble can't reach from a
-module that re-exports the binding and about `declare-exporting` claims that aren't true (with a
-suggested fix for each), and can print `defproc`/`defform` stubs for whatever is missing
-(`--format stubs`). In CI, `--min <percent>` fails the build when coverage drops, and `--strict`
-fails it when there are warnings.
+It reports missing documentation per module, warns about bindings that don't connect to their
+docs as exported by a module that re-exports them and about `declare-exporting` claims that
+aren't true (with a suggested fix for each), and can print `defproc`/`defform` stubs for whatever
+is missing (`--format stubs`). In CI, `--min <percent>` fails the build when coverage drops, and
+`--strict` fails it when there are warnings.
 
 Configuration such as bindings to ignore goes in the package's `info.rkt`.
 

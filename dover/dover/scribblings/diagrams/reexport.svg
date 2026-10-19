@@ -18,7 +18,7 @@
   <!-- The two public modules -->
   <rect class="box" x="20" y="24" width="170" height="54" rx="6"/>
   <text class="mod" x="105" y="47" text-anchor="middle">mypkg</text>
-  <text class="ok" x="105" y="67" text-anchor="middle">✓ links to the docs</text>
+  <text class="ok" x="105" y="67" text-anchor="middle">✓ connects to the docs</text>
 
   <rect class="box" x="340" y="24" width="200" height="54" rx="6"/>
   <text class="mod" x="440" y="47" text-anchor="middle">mypkg/render</text>

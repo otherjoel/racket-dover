@@ -10,7 +10,7 @@
 @title{Dover: Documentation Coverage}
 @author{Joel Dueck}
 
-Racket has an amazing dcoumentation system in @seclink["plt-manuals" #:doc '(lib
+Racket has an amazing documentation system in @seclink["plt-manuals" #:doc '(lib
 "scribblings/scribble/scribble.scrbl")]{Scribble}, and if you’re making Racket packages, you should
 use it.
 
@@ -47,26 +47,27 @@ After installing the package, which also builds its docs, check it with @exec{ra
 
 @tour-output["check"]
 
-Dover finds two bindings that have no documentation, and reports both under the
-@racketmodfont{tally} module. One of those bindings, @racketidfont{with-counter} is actually defined
+Dover finds two bindings that have no documentation. Notice that it and both under the
+@racketmodfont{tally} module. One of those bindings, @racketidfont{with-counter}, is actually defined
 in @filepath{tally/main.rkt}, so that makes sense. But the other one, @racketidfont{counter-value},
 is actually defined in the private submodule, then reexported from @racketmodfont{tally/base}
 @emph{and} from @racketmodfont{tally}. So how does Dover decide that documention from
 @racketidfont{counter-value} is supposed to go in the docs for the @racketmodfont{tally} module?
 
-When the same binding comes from multiple places, Dover tries to be smart which module it counts
-them against. In this case it sees that we have already documented most other bindings from
+When the same binding comes from multiple places, Dover tries to be smart about which module it
+counts them against. In this case it sees that we have already documented most other bindings from
 @racketmodfont{tally/private/counter} (@racketidfont{counter?}, @racketidfont{make-counter} and
 @racketidfont{counter-add!}) in the scribble docs for @racketmodfont{tally}, and that the
 undocumented @racketidfont{counter-value} is also exported from @racketmodfont{tally}. (See
 @secref["grouping"].)
 
-Additionally, the warnings say that a program that requires @racketmodfont{tally/base} gets no links
-to the docs for @racketidfont{counter?}, @racketidfont{make-counter} and
-@racketidfont{counter-add!}. This is because the @racket[defproc] forms for those bindings are
-inside a section that declares it is documenting bindings from @racketmodfont{tally}, and
-@racketmodfont{tally/base} gets these bindings straight from the private module without going
-through @racketmodfont{tally}. (See @secref["warnings"].)
+Additionally, there are warnings about the docs that @emph{do} already exist. They say that
+@racketidfont{counter?}, @racketidfont{make-counter} and @racketidfont{counter-add!}, as exported by
+@racketmodfont{tally/base}, don’t connect to their docs, so a program that requires
+@racketmodfont{tally/base} gets no links to them. This is because the @racket[defproc] forms for
+those bindings are inside a section that declares it is documenting bindings from
+@racketmodfont{tally}, and @racketmodfont{tally/base} gets these bindings straight from the private
+module without going through @racketmodfont{tally}. (See @secref["warnings"].)
 
 To start on the missing documentation, you can ask for stubs using the @Flag{f} (or @DFlag{format})
 flag and specifying @tt{stubs} as the output format:
@@ -174,17 +175,18 @@ Besides missing documentation, Dover reports two problems with documented bindin
 suggested fix. Warnings do not affect the coverage score.
 
 @itemlist[
- @item{@bold{Docs not reachable from a module.} Every checked module that exports a binding should
-       lead to its documentation, so that a program requiring that module gets links to the
-       docs. Scribble looks up a binding by following its re-exports from the required module
-       toward the definition, looking for the module the docs were keyed to. If the docs use
+ @item{@bold{Binding doesn’t connect to its docs.} A documented binding should connect to its
+       documentation as exported by every checked module that exports it, so that a program
+       requiring any of those modules gets links to the docs. To find the docs for a binding as
+       exported by a module, Scribble follows its re-exports from that module toward the
+       definition, looking for the module the docs are keyed to. If the docs use
        @racket[(defmodule mypkg/a)] but @racketmodfont{mypkg/b} re-exports the binding straight
-       from the module that defines it, the lookup from @racketmodfont{mypkg/b} never passes
-       through @racketmodfont{mypkg/a} and fails.
+       from the module that defines it, that path never passes through @racketmodfont{mypkg/a},
+       so the binding as exported by @racketmodfont{mypkg/b} doesn’t connect to its docs.
 
        To fix it, add the defining module to the @racket[#:use-sources] of the
        @racket[defmodule] or @racket[declare-exporting], which keys the docs to the definition
-       so that every re-export reaches them. (Adding @racketmodfont{mypkg/b} to
+       so that every re-export connects to them. See @secref["recipe-private"]. (Adding @racketmodfont{mypkg/b} to
        @racket[declare-exporting] does not help.) If @racketmodfont{mypkg/b} is an internal
        module that users should not require, list it in @racketidfont{dover-consider-private}
        instead.}
@@ -333,8 +335,8 @@ A @seclink["warnings"]{documentation warning} about @racket[binding] and @racket
 subtypes are instantiated.}
 
 @defstruct*[(unreachable-docs-warning doc-warning) ()]{
-Scribble can't find the documentation for the warning's binding from its module, which exports
-the binding.}
+The warning's binding is documented, but as exported by the warning's module, it doesn't connect to
+its documentation.}
 
 @defstruct*[(export-claim-warning doc-warning) ()]{
 The documentation says the warning's module exports its binding, but the module doesn't.}
