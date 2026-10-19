@@ -3,20 +3,15 @@
 @(require racket/runtime-path
           scribble/core
           scribble/html-properties
+          "terminal.rkt"
           (for-label racket/base
                      scribble/manual))
 
 @(define scribble-doc '(lib "scribblings/scribble/scribble.scrbl"))
-@(define-runtime-path reexport-svg "diagrams/reexport.svg")
-@(define-runtime-path private-before-svg "diagrams/private-before.svg")
-@(define-runtime-path private-after-svg "diagrams/private-after.svg")
 @(define-runtime-path recipe-css "recipe.css")
 
-@(define (diagram path . alt)
-   (centered (apply image path #:style (style "recipe-diagram" (list (css-style-addition recipe-css)))
-                    alt)))
-
-@title[#:tag "recipe"]{A recipe for package docs}
+@title[#:tag "recipe" #:style (style #f (list (css-style-addition recipe-css)))]{A recipe for
+package docs}
 
 Scribble can do a great deal, and @seclink["how-to-doc" #:doc scribble-doc]{its own documentation}
 covers all of it. This section is the short version: the handful of forms you need to document the
@@ -131,8 +126,8 @@ See @secref["tour"] for an example.
 @section[#:tag "recipe-reexports"]{When modules re-export each other}
 
 It’s common for a package’s main module to re-export the bindings from its other public modules,
-so that users can @racket[(require mypkg)] to get everything, or @racket[(require mypkg/render)]
-for just the rendering functions.
+so that users can @racket[(require mypkg)] to get everything, or, for example, 
+@racket[(require mypkg/render)] for just those functions.
 
 If you document @racketidfont{render-page} under @racket[(defmodule mypkg/render)], it connects
 to its docs as exported by either module. To find the docs for @racketidfont{render-page} as
@@ -155,7 +150,7 @@ The @racket[defmodule] still shows the @racket[require] line for @racketmodfont{
 the @racket[declare-exporting] declares both modules. Now @racketidfont{render-page} is provided
 from @racketmodfont{mypkg/render} and @racketmodfont{mypkg}.
 
-@diagram[reexport-svg]{The mypkg module re-exports render-page from mypkg/render. The docs
+@diagram["reexport.svg"]{The mypkg module re-exports render-page from mypkg/render. The docs
 are keyed to mypkg/render, and also list mypkg.}
 
 The order of the modules matters. Scribble keys your docs to the binding as exported by the first
@@ -166,8 +161,8 @@ binding doesn’t pass through @racketmodfont{mypkg} on its way there.
 
 @section[#:tag "recipe-private"]{When public modules share a private module}
 
-Another common layout keeps the code in a private module, and has more than one public module
-re-export from it directly. Say @racketmodfont{mypkg} exports everything, and
+Another common pattern is to keep some code in a private module, and have more than one public module
+re-export its bindings. Say @racketmodfont{mypkg} exports everything, and
 @racketmodfont{mypkg/lite} exports just the basics, and each gets @racketidfont{make-widget} straight
 from @racketmodfont{mypkg/private/widget}.
 
@@ -177,7 +172,7 @@ by @racketmodfont{mypkg/lite}, Scribble follows its re-exports back toward the d
 for the module the docs are keyed to. That path goes from @racketmodfont{mypkg/lite} to
 @racketmodfont{mypkg/private/widget}, and never passes through @racketmodfont{mypkg}:
 
-@diagram[private-before-svg]{The docs are keyed to mypkg. Both mypkg and mypkg/lite
+@diagram["private-before.svg"]{The docs are keyed to mypkg. Both mypkg and mypkg/lite
 re-export make-widget from mypkg/private/widget, so make-widget as exported by mypkg/lite doesn’t
 connect to its docs.}
 
@@ -195,7 +190,7 @@ The fix is @racket[#:use-sources], which keys the docs to the module that define
 Every re-export leads back to the definition, so now @racketidfont{make-widget} connects to its
 docs as exported by any module that re-exports it:
 
-@diagram[private-after-svg]{The docs are keyed to mypkg/private/widget, where make-widget
+@diagram["private-after.svg"]{The docs are keyed to mypkg/private/widget, where make-widget
 is defined, so make-widget connects to them as exported by both mypkg and mypkg/lite.}
 
 The @racket[#:use-sources] option fixes the connection; it doesn’t change which modules your docs say

@@ -79,7 +79,7 @@ already has docs, Dover doesn't start a new @racket[defmodule] for it, but sugge
 under the existing @racket[defmodule]. It also suggests adding each stub near the docs for the
 bindings defined in the same module: @racketidfont{counter-value} near the other counter functions,
 and @racketidfont{with-counter} near @racketidfont{tally}. Since these differ, each gets its own
-group, after a dashed line.
+group, after a separator line.
 
 Now we’ll fix the docs by adding in the missing stubs and filling them in, and by adding the
 @racket[#:use-sources] that the warnings suggest:
@@ -146,25 +146,33 @@ otherwise. Only documented bindings count as covered.
 
 @subsection[#:tag "grouping"]{Where bindings are reported}
 
-Each scored binding is reported under one of the checked modules that export it:
+Dover reports each scored binding under exactly one of the checked modules that export it:
+
+@diagram["grouping.svg"]{Flowchart. For a scored binding: if it is documented and its docs name a
+module that exports it, report it under the first such module. If it is missing and its siblings
+(the documented bindings defined in the same module) are under a module that exports it, report it
+under the module that most of them are under. Otherwise, report it under the checked module nearest
+its definition. Ties go to the module that sorts first.}
 
 @itemlist[
- @item{A documented binding goes under the first module that its documentation says exports it,
-       as given by @racket[defmodule] or @racket[declare-exporting]. For example, after
-       @racket[(declare-exporting mypkg/element mypkg/core)], the bindings in that section are
-       reported under @racketmodfont{mypkg/element}.}
- @item{A missing binding goes with its siblings, the documented bindings defined in the same
-       module: it is reported under the module that most of them are reported under, if that
-       module also exports it. So if @racketmodfont{mypkg/private/impl} defines several bindings
-       that are documented under @racketmodfont{mypkg}, a missing one that @racketmodfont{mypkg}
-       also exports is reported under @racketmodfont{mypkg}, next to the others.}
- @item{Any other missing binding goes under the checked module nearest to its definition. If the
-       module that defines it is checked, that is the module; otherwise it is the first checked
-       module that re-exports it, working outward from the definition. So a missing binding
-       defined in @racketmodfont{mypkg/private/impl} and re-exported by
-       @racketmodfont{mypkg/element} (which is in turn re-exported by @racketmodfont{mypkg}) is
-       reported under @racketmodfont{mypkg/element}, which is probably where its documentation
-       belongs.}
+ 
+@item{A documented binding goes under the first module that its documentation says exports it, as
+given by @racket[defmodule] or @racket[declare-exporting]. For example, after
+@racket[(declare-exporting mypkg/element mypkg/core)], the bindings in that section are reported
+under @racketmodfont{mypkg/element}.}
+ 
+@item{A missing binding whose siblings are documented is reported under the module that most of them
+are reported under, if that module also exports it. So if @racketmodfont{mypkg/private/impl} defines
+several bindings that are documented under @racketmodfont{mypkg}, a missing one that
+@racketmodfont{mypkg} also exports is reported under @racketmodfont{mypkg}, next to the others.}
+
+@item{Any other missing binding goes under the checked module nearest to its definition. If the
+module that defines it is checked, that is the module; otherwise it is the first checked module that
+re-exports it, working outward from the definition. So a missing binding defined in
+@racketmodfont{mypkg/private/impl} and re-exported by @racketmodfont{mypkg/element} (which is in
+turn re-exported by @racketmodfont{mypkg}) is reported under @racketmodfont{mypkg/element}, which is
+probably where its documentation belongs.}
+
 ]
 
 When two modules are equally near, or have equally many siblings, the one that sorts first wins.
@@ -225,7 +233,7 @@ suggested fix. Warnings do not affect the coverage score.
               several sections, Dover also suggests adding each stub near the docs for other
               bindings defined in the same module, naming up to three of them. Stubs that get
               the same suggestion are listed together; when a module's stubs get different
-              suggestions, each group comes after a dashed line.}]}
+              suggestions, each group comes after a separator line.}]}
 ]
 
 @subsection{Configuration in @filepath{info.rkt}}

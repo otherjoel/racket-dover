@@ -8,15 +8,23 @@
          scribble/html-properties
          scribble/manual)
 
-;; Helpers for the Quick Tour: showing the sample package's files, and showing terminal output
-;; captured by tour/capture.rkt.
+;; Helpers for the docs: showing the Quick Tour's sample package and the terminal output captured
+;; by tour/capture.rkt, and showing diagrams.
 
-(provide tour-file
+(provide diagram
+         tour-file
          tour-output
          tour-tree)
 
 (define-runtime-path terminal-css "terminal.css")
 (define-runtime-path tour-dir "tour/")
+(define-runtime-path diagrams-dir "diagrams/")
+
+;; Shows diagrams/<name>, centered and shrunk to fit narrow screens. The alt content describes it.
+(define (diagram name . alt)
+  (centered (apply image (build-path diagrams-dir name)
+                   #:style (style "diagram" (list (css-style-addition terminal-css)))
+                   alt)))
 
 (define (styled class content)
   (element (style class (list (css-style-addition terminal-css))) content))
@@ -210,15 +218,16 @@
        (loop next (vector-ref visible next) (- width (string-length indent)) indent
              (cons (piece (vector-ref visible end)) acc))])))
 
-;; Like verbatim, renders runs of spaces as hspace so that they are kept exactly
+;; Like verbatim, renders runs of spaces as hspace so that they are kept exactly, and doesn't
+;; decode the text (as tt would), so that "---" isn't turned into an em dash
 (define (text->content str)
   (define m (regexp-match-positions #rx"(?:^| ) +" str))
   (cond
-    [(not m) (list (tt str))]
+    [(not m) (list (element 'tt str))]
     [else
      (define start (caar m))
      (define end (cdar m))
-     (list* (tt (substring str 0 start))
+     (list* (element 'tt (substring str 0 start))
             (hspace (- end start))
             (text->content (substring str end)))]))
 

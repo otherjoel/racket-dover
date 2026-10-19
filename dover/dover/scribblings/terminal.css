@@ -26,6 +26,12 @@
 .term-yellow { color: #a60; }
 .term-gray { color: #888; }
 
+/* Diagrams shrink to fit narrow screens */
+.diagram {
+    max-width: 100%;
+    height: auto;
+}
+
 /* Code added to a file shown by tour-file */
 .tour-added {
     background: #dfd;

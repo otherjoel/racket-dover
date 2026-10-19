@@ -370,7 +370,7 @@
 ;;
 ;; Stubs with the same siblings get the same advice, so they are listed together. When all of a
 ;; module's stubs have the same siblings, all the advice goes at the top; otherwise each group of
-;; stubs gets its own advice, after a dashed line.
+;; stubs gets its own advice, after a separator line.
 (define (write-scribble-stubs report)
   (define scored (coverage-report-scored report))
   (define documented-modules
@@ -396,7 +396,7 @@
         [(member mod documented-modules)
          (~a "under an existing declare-exporting for " (module->string mod))]
         [else #f]))
-    (write-stub-comment (make-string 48 #\=))
+    (write-stub-comment (make-string 48 #\═))
     (unless module-advice
       (term-bytes color:bold)
       (write-string (~a "@defmodule[" (module->string mod) "]"))
@@ -420,10 +420,9 @@
        (newline)
        (for ([g (in-list groups)])
          (match-define (cons sibs bs) g)
-         (write-stub-comment (make-string 48 #\-))
+         (write-stub-comment (make-string 48 #\─))
          (unless (null? sibs)
-           (write-stub-comment (~a "Suggestion: add " (these bs) " " (near-advice sibs)))
-           (newline))
+           (write-stub-comment (~a "Suggestion: add " (these bs) " " (near-advice sibs))))
          (for-each write-stub-def bs))])))
 
 (module+ test
