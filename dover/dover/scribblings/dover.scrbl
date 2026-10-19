@@ -71,8 +71,8 @@ reports it under. In this case it sees that we have already documented the other
 undocumented @racketidfont{counter-value} is also exported from @racketmodfont{tally}. (See
 @secref["grouping"].)
 
-Additionally, there are warnings about the docs that @emph{do} already exist. They say that
-@racketidfont{counter?}, @racketidfont{make-counter} and @racketidfont{counter-add!}, as exported by
+Separately: there are warnings about the docs that @emph{do} already exist. They say that uses of
+@racketidfont{counter?}, @racketidfont{make-counter} and @racketidfont{counter-add!}, when imported from
 @racketmodfont{tally/base}, don’t connect to their docs, so a program that requires
 @racketmodfont{tally/base} gets no links to them. This is because the @racket[defproc] forms for
 those bindings are inside a section that declares it is documenting bindings from
