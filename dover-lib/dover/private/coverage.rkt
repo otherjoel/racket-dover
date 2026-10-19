@@ -453,7 +453,8 @@
 (define (check-coverage mods #:packages pkgs #:ignore [ignore '()])
   (define-values (raws errors)
     (parameterize ([current-namespace (make-base-empty-namespace)]
-                   [current-export-cache (make-hash)])
+                   [current-export-cache (make-hash)]
+                   [use-compiled-file-check 'exists])
       (for/fold ([raws '()]
                  [errors '()]
                  #:result (values (reverse raws) (reverse errors)))
